@@ -1,18 +1,15 @@
 // src/app/api/admin/apis-status/route.js
 // API para obtener el estado de todas las APIs disponibles
 
-import { getDatabase } from '@/lib/database';
-import { IntegracionRepository } from '@/lib/repositories/IntegracionRepository';
-import { EjecucionRepository } from '@/lib/repositories/EjecucionRepository';
+import { getDatabase } from '@/lib/db-client';
 
 export async function GET() {
   try {
     const db = getDatabase();
-    const integracionRepo = new IntegracionRepository(db);
-    const ejecucionRepo = new EjecucionRepository(db);
 
     // Obtener todas las integraciones
-    const integraciones = integracionRepo.findAll();
+    const integsResult = await db.execute('SELECT * FROM integraciones ORDER BY nombre');
+    const integraciones = integsResult.rows || [];
 
     // Definir todas las APIs del sistema
     const apis = [
@@ -33,10 +30,11 @@ export async function GET() {
     ];
 
     // Obtener APIs genéricas dinámicas
-    const genericAPIs = db.prepare(`
+    const genericResult = await db.execute(`
       SELECT DISTINCT id as nombre FROM integraciones 
       WHERE id LIKE 'API-%'
-    `).all();
+    `);
+    const genericAPIs = genericResult.rows || [];
 
     genericAPIs.forEach(api => {
       apis.push({
@@ -49,8 +47,9 @@ export async function GET() {
     // Determinar estado de cada API
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const oneDayAgoISO = oneDayAgo.toISOString();
 
-    const apisWithStatus = apis.map(api => {
+    const apisWithStatus = await Promise.all(apis.map(async (api) => {
       // Buscar integraciones relacionadas
       const integsRelacionadas = integraciones.filter(i => 
         i.proyecto_id === api.proyecto
@@ -60,15 +59,20 @@ export async function GET() {
       let ultimaEjecucion = null;
 
       // Verificar si tiene ejecuciones recientes
-      integsRelacionadas.forEach(integ => {
-        const ultimaEjec = ejecucionRepo.getUltimaEjecucion(integ.id);
+      for (const integ of integsRelacionadas) {
+        const ejecResult = await db.execute(
+          'SELECT fecha_inicio FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 1',
+          [integ.id]
+        );
+        
+        const ultimaEjec = ejecResult.rows[0];
         if (ultimaEjec && new Date(ultimaEjec.fecha_inicio) > oneDayAgo) {
           usado = true;
           if (!ultimaEjecucion || new Date(ultimaEjec.fecha_inicio) > new Date(ultimaEjecucion)) {
             ultimaEjecucion = ultimaEjec.fecha_inicio;
           }
         }
-      });
+      }
 
       return {
         ...api,
@@ -76,7 +80,7 @@ export async function GET() {
         ultimaEjecucion,
         integraciones: integsRelacionadas.length
       };
-    });
+    }));
 
     // Ordenar: APIs en uso primero (rojas), luego disponibles (verdes)
     apisWithStatus.sort((a, b) => {
@@ -95,7 +99,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error obteniendo estado de APIs:', error);
     return Response.json(
-      { error: 'Error obteniendo estado de APIs' },
+      { error: 'Error obteniendo estado de APIs', details: error.message },
       { status: 500 }
     );
   }

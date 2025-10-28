@@ -1,7 +1,7 @@
 // src/app/api/admin/stats/route.js
 // API para obtener estadísticas generales del sistema
 
-import { getDatabase } from '@/lib/database';
+import { getDatabase } from '@/lib/db-client';
 
 export async function GET() {
   try {
@@ -10,50 +10,36 @@ export async function GET() {
     // Contar APIs disponibles (endpoints fijos + dinámicos)
     const totalAPIs = 9; // 3 proyectos x 3 endpoints cada uno
 
-    // Contar integraciones
-    const totalIntegraciones = db.prepare(`
-      SELECT COUNT(*) as count FROM integraciones
-    `).get().count;
+    // Contar integraciones (Turso es asíncrono)
+    const integResult = await db.execute('SELECT COUNT(*) as count FROM integraciones');
+    const totalIntegraciones = integResult.rows[0]?.count || 0;
 
     // Contar logs
-    const totalLogs = db.prepare(`
-      SELECT COUNT(*) as count FROM logs
-    `).get().count;
+    const logsResult = await db.execute('SELECT COUNT(*) as count FROM logs');
+    const totalLogs = logsResult.rows[0]?.count || 0;
 
     // Contar ejecuciones
-    const totalEjecuciones = db.prepare(`
-      SELECT COUNT(*) as count FROM ejecuciones
-    `).get().count;
+    const ejecResult = await db.execute('SELECT COUNT(*) as count FROM ejecuciones');
+    const totalEjecuciones = ejecResult.rows[0]?.count || 0;
 
-    // Obtener tamaño aproximado de la BD (solo para SQLite local)
-    let dbSize = 'N/A';
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const dbPath = path.join(process.cwd(), 'data', 'sap-cpi-monitor.db');
-      if (fs.existsSync(dbPath)) {
-        const stats = fs.statSync(dbPath);
-        const sizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-        dbSize = `${sizeInMB} MB`;
-      }
-    } catch (error) {
-      // En producción (Turso) no hay archivo físico
-      dbSize = 'Cloud DB';
-    }
+    // En Turso (cloud) no hay archivo físico
+    const dbSize = 'Cloud DB (Turso)';
 
     // Logs por tipo
-    const logsByType = db.prepare(`
+    const logsByTypeResult = await db.execute(`
       SELECT tipo, COUNT(*) as count 
       FROM logs 
       GROUP BY tipo
-    `).all();
+    `);
+    const logsByType = logsByTypeResult.rows || [];
 
     // Integraciones por proyecto
-    const integsByProject = db.prepare(`
+    const integsByProjectResult = await db.execute(`
       SELECT proyecto_id, COUNT(*) as count 
       FROM integraciones 
       GROUP BY proyecto_id
-    `).all();
+    `);
+    const integsByProject = integsByProjectResult.rows || [];
 
     return Response.json({
       totalAPIs,
@@ -68,7 +54,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
     return Response.json(
-      { error: 'Error obteniendo estadísticas' },
+      { error: 'Error obteniendo estadísticas', details: error.message },
       { status: 500 }
     );
   }

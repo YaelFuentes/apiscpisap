@@ -1,9 +1,7 @@
 // src/app/api/admin/clean-logs/route.js
 // API para limpiar logs antiguos
 
-import { getDatabase } from '@/lib/database';
-import { LogRepository } from '@/lib/repositories/LogRepository';
-import { EjecucionRepository } from '@/lib/repositories/EjecucionRepository';
+import { getDatabase } from '@/lib/db-client';
 
 export async function POST(request) {
   try {
@@ -18,18 +16,30 @@ export async function POST(request) {
     }
 
     const db = getDatabase();
-    const logRepo = new LogRepository(db);
-    const ejecucionRepo = new EjecucionRepository(db);
+
+    // Calcular fecha límite
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffISO = cutoffDate.toISOString();
 
     // Eliminar logs antiguos
-    const deletedLogs = logRepo.deleteOlderThan(days);
+    const logsResult = await db.execute(
+      'DELETE FROM logs WHERE timestamp < ?',
+      [cutoffISO]
+    );
 
     // Eliminar ejecuciones antiguas
-    const deletedEjecuciones = ejecucionRepo.deleteOlderThan(days);
+    const ejecResult = await db.execute(
+      'DELETE FROM ejecuciones WHERE fecha_inicio < ?',
+      [cutoffISO]
+    );
+
+    const deletedLogs = logsResult.rowsAffected || 0;
+    const deletedEjecuciones = ejecResult.rowsAffected || 0;
 
     return Response.json({
       success: true,
-      deleted: deletedLogs,
+      deletedLogs,
       deletedEjecuciones,
       mensaje: `Eliminados ${deletedLogs} logs y ${deletedEjecuciones} ejecuciones mayores a ${days} días`
     });
@@ -37,7 +47,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error limpiando logs:', error);
     return Response.json(
-      { error: 'Error limpiando logs' },
+      { error: 'Error limpiando logs', details: error.message },
       { status: 500 }
     );
   }

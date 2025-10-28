@@ -1,18 +1,7 @@
 // src/lib/db-client.js
-// Cliente unificado que decide qué base de datos usar
+// Cliente que usa SOLO Turso (sin SQLite local)
 
-const isTurso = process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN;
+import { getDatabase, closeDatabase } from './database-turso.js';
 
-let dbModule;
-
-if (isTurso) {
-  // Usar Turso en producción/Vercel
-  dbModule = await import('./database-turso.js');
-} else {
-  // Usar SQLite local en desarrollo
-  dbModule = await import('./database.js');
-}
-
-export const getDatabase = dbModule.getDatabase;
-export const closeDatabase = dbModule.closeDatabase;
-export default dbModule.default;
+export { getDatabase, closeDatabase };
+export default getDatabase;
