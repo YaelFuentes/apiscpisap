@@ -4,24 +4,54 @@
 import { createClient } from '@libsql/client';
 
 let db = null;
+let connectionTested = false;
 
 export function getDatabase() {
   if (!db) {
-    const url = process.env.TURSO_DATABASE_URL;
-    const authToken = process.env.TURSO_AUTH_TOKEN;
+    const url = process.env.database_TURSO_DATABASE_URL;
+    const authToken = process.env.database_TURSO_AUTH_TOKEN;
 
     if (!url || !authToken) {
-      throw new Error('Faltan las variables de entorno TURSO_DATABASE_URL o TURSO_AUTH_TOKEN');
+      console.error('❌ ERROR: Faltan variables de entorno');
+      console.error('database_TURSO_DATABASE_URL:', url ? '✓ Configurada' : '✗ No configurada');
+      console.error('database_TURSO_AUTH_TOKEN:', authToken ? '✓ Configurada' : '✗ No configurada');
+      throw new Error('Faltan las variables de entorno database_TURSO_DATABASE_URL o database_TURSO_AUTH_TOKEN');
     }
 
-    db = createClient({
-      url,
-      authToken,
-    });
+    try {
+      db = createClient({
+        url,
+        authToken,
+      });
 
-    console.log('✅ Conectado a Turso');
+      console.log('🔗 Intentando conectar a Turso...');
+      console.log('📍 URL:', url.substring(0, 30) + '...');
+      console.log('✅ Cliente Turso creado exitosamente');
+      
+      // Test de conexión asíncrono
+      if (!connectionTested) {
+        testConnection(db);
+        connectionTested = true;
+      }
+      
+    } catch (error) {
+      console.error('❌ ERROR al crear cliente Turso:', error.message);
+      throw error;
+    }
   }
   return db;
+}
+
+// Función para probar la conexión
+async function testConnection(client) {
+  try {
+    const result = await client.execute('SELECT 1 as test');
+    if (result.rows && result.rows.length > 0) {
+      console.log('✅ CONEXIÓN A TURSO EXITOSA - Base de datos respondiendo correctamente');
+    }
+  } catch (error) {
+    console.error('❌ ERROR: Fallo al conectar con Turso:', error.message);
+  }
 }
 
 // Ejecutar consultas preparadas (compatible con better-sqlite3)

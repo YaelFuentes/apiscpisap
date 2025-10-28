@@ -1,8 +1,8 @@
 // API: QAS HTTPS Logs - Proyecto Evaluar
 // Nomenclatura: [ambiente]-[protocolo]-[funcionalidad]
-// Retorna los logs de las integraciones HTTPS en QAS desde SQLite
+// Retorna los logs de las integraciones HTTPS en QAS desde Turso
 
-import { LogRepository } from '@/lib/repositories/LogRepository';
+import { getDatabase } from '@/lib/db-client';
 
 export async function GET(request) {
   try {
@@ -11,19 +11,46 @@ export async function GET(request) {
     const tipo = searchParams.get('tipo');
     const limit = parseInt(searchParams.get('limit') || '100');
 
-    const logRepo = new LogRepository();
+    const db = getDatabase();
     let logs = [];
 
     if (integracionId) {
       // Logs de una integración específica
       if (tipo && tipo !== 'ALL') {
-        logs = logRepo.findByTipo(integracionId, tipo, limit);
+        const result = await db.execute(
+          `SELECT l.*, i.nombre as integracion_nombre 
+           FROM logs l 
+           JOIN integraciones i ON l.integracion_id = i.id 
+           WHERE l.integracion_id = ? AND l.tipo = ? 
+           ORDER BY l.timestamp DESC 
+           LIMIT ?`,
+          [integracionId, tipo, limit]
+        );
+        logs = result.rows || [];
       } else {
-        logs = logRepo.findByIntegracion(integracionId, limit);
+        const result = await db.execute(
+          `SELECT l.*, i.nombre as integracion_nombre 
+           FROM logs l 
+           JOIN integraciones i ON l.integracion_id = i.id 
+           WHERE l.integracion_id = ? 
+           ORDER BY l.timestamp DESC 
+           LIMIT ?`,
+          [integracionId, limit]
+        );
+        logs = result.rows || [];
       }
     } else {
       // Logs de todo el proyecto
-      logs = logRepo.findByProyecto('evaluar', limit);
+      const result = await db.execute(
+        `SELECT l.*, i.nombre as integracion_nombre 
+         FROM logs l 
+         JOIN integraciones i ON l.integracion_id = i.id 
+         WHERE i.proyecto_id = 'evaluar' 
+         ORDER BY l.timestamp DESC 
+         LIMIT ?`,
+        [limit]
+      );
+      logs = result.rows || [];
     }
 
     // Formatear logs para la respuesta

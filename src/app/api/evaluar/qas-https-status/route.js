@@ -1,19 +1,16 @@
 // API: QAS HTTPS Status - Proyecto Evaluar
 // Nomenclatura: [ambiente]-[protocolo]-[funcionalidad]
-// Retorna el estado de las integraciones HTTPS en QAS desde SQLite
+// Retorna el estado de las integraciones HTTPS en QAS desde Turso
 
-import { IntegracionRepository } from '@/lib/repositories/IntegracionRepository';
-import { EjecucionRepository } from '@/lib/repositories/EjecucionRepository';
-import { ProyectoRepository } from '@/lib/repositories/ProyectoRepository';
+import { getDatabase } from '@/lib/db-client';
 
 export async function GET(request) {
   try {
-    const proyectoRepo = new ProyectoRepository();
-    const integracionRepo = new IntegracionRepository();
-    const ejecucionRepo = new EjecucionRepository();
+    const db = getDatabase();
 
     // Obtener proyecto
-    const proyecto = proyectoRepo.findById('evaluar');
+    const proyectoResult = await db.execute('SELECT * FROM proyectos WHERE id = ?', ['evaluar']);
+    const proyecto = proyectoResult.rows[0];
     
     if (!proyecto) {
       return Response.json(
@@ -23,11 +20,19 @@ export async function GET(request) {
     }
 
     // Obtener integraciones del proyecto
-    const integraciones = integracionRepo.findByProyecto('evaluar');
+    const integsResult = await db.execute(
+      'SELECT * FROM integraciones WHERE proyecto_id = ? AND activo = 1 ORDER BY nombre',
+      ['evaluar']
+    );
+    const integraciones = integsResult.rows || [];
 
     // Para cada integración, obtener la última ejecución
-    const integracionesConDatos = integraciones.map(integracion => {
-      const ultimaEjecucion = ejecucionRepo.findUltimaEjecucion(integracion.id);
+    const integracionesConDatos = await Promise.all(integraciones.map(async (integracion) => {
+      const ejecResult = await db.execute(
+        'SELECT * FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 1',
+        [integracion.id]
+      );
+      const ultimaEjecucion = ejecResult.rows[0];
       
       return {
         id: integracion.id,
@@ -41,7 +46,7 @@ export async function GET(request) {
         mensajesProcesados: ultimaEjecucion?.mensajes_procesados || 0,
         errores: ultimaEjecucion?.errores || 0
       };
-    });
+    }));
 
     const data = {
       proyecto: proyecto.nombre,

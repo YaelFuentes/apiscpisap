@@ -1,23 +1,29 @@
 // API: QAS HTTPS Status - Proyecto TeachLR
 // Nomenclatura: [ambiente]-[protocolo]-[funcionalidad]
-// Retorna el estado de las integraciones HTTPS en QAS desde SQLite
+// Retorna el estado de las integraciones HTTPS en QAS desde Turso
 
-import { IntegracionRepository } from '@/lib/repositories/IntegracionRepository';
-import { EjecucionRepository } from '@/lib/repositories/EjecucionRepository';
-import { ProyectoRepository } from '@/lib/repositories/ProyectoRepository';
+import { getDatabase } from '@/lib/db-client';
 
 export async function GET(request) {
   try {
-    const proyectoRepo = new ProyectoRepository();
-    const integracionRepo = new IntegracionRepository();
-    const ejecucionRepo = new EjecucionRepository();
+    const db = getDatabase();
 
-    const proyecto = proyectoRepo.findById('teachlr');
+    const proyectoResult = await db.execute('SELECT * FROM proyectos WHERE id = ?', ['teachlr']);
+    const proyecto = proyectoResult.rows[0];
     if (!proyecto) return Response.json({ error: 'Proyecto no encontrado' }, { status: 404 });
 
-    const integraciones = integracionRepo.findByProyecto('teachlr');
-    const integracionesConDatos = integraciones.map(integracion => {
-      const ultimaEjecucion = ejecucionRepo.findUltimaEjecucion(integracion.id);
+    const integsResult = await db.execute(
+      'SELECT * FROM integraciones WHERE proyecto_id = ? AND activo = 1 ORDER BY nombre',
+      ['teachlr']
+    );
+    const integraciones = integsResult.rows || [];
+
+    const integracionesConDatos = await Promise.all(integraciones.map(async (integracion) => {
+      const ejecResult = await db.execute(
+        'SELECT * FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 1',
+        [integracion.id]
+      );
+      const ultimaEjecucion = ejecResult.rows[0];
       return {
         id: integracion.id,
         nombre: integracion.nombre,
@@ -30,7 +36,7 @@ export async function GET(request) {
         mensajesProcesados: ultimaEjecucion?.mensajes_procesados || 0,
         errores: ultimaEjecucion?.errores || 0
       };
-    });
+    }));
 
     return Response.json({
       proyecto: proyecto.nombre,
