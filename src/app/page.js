@@ -5,6 +5,7 @@ import ProjectMonitor from '@/components/ProjectMonitor';
 import MetricsPanel from '@/components/MetricsPanel';
 import LogsViewer from '@/components/LogsViewer';
 import AdminPanel from '@/components/AdminPanel';
+import LogMonitor from '@/components/LogMonitor';
 
 export default function Home() {
   const [proyectoActivo, setProyectoActivo] = useState('evaluar');
@@ -87,6 +88,7 @@ export default function Home() {
             { id: 'monitor', label: '📊 Monitor', icon: '📊' },
             { id: 'metrics', label: '📈 Métricas', icon: '📈' },
             { id: 'logs', label: '📋 Logs', icon: '📋' },
+            { id: 'realtime', label: '🔴 Logs Real-Time', icon: '🔴' },
             { id: 'admin', label: '⚙️ Admin', icon: '⚙️' }
           ].map((vista) => (
             <button
@@ -125,6 +127,10 @@ export default function Home() {
             proyecto={proyectoSeleccionado.nombre}
             apiEndpoint={proyectoSeleccionado.logsEndpoint}
           />
+        )}
+
+        {vistaActiva === 'realtime' && (
+          <LogMonitor />
         )}
 
         {vistaActiva === 'admin' && (
