@@ -1,0 +1,12 @@
+# Archivos y directorios a ignorar en Vercel
+node_modules
+.next
+out
+.env.local
+.env*.local
+data
+*.db
+*.sqlite
+*.sqlite3
+.git
+.DS_Store
