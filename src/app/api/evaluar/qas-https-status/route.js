@@ -8,24 +8,27 @@ async function getStatusData() {
   const db = getDatabase();
 
   // Obtener proyecto
-  const proyectoResult = await db.execute('SELECT * FROM proyectos WHERE id = ?', ['evaluar']);
+  const proyectoResult = await db.execute({
+    sql: 'SELECT * FROM proyectos WHERE id = ?',
+    args: ['evaluar']
+  });
   const proyecto = proyectoResult.rows[0];
   
   if (!proyecto) return null;
 
   // Obtener integraciones del proyecto
-  const integsResult = await db.execute(
-    'SELECT * FROM integraciones WHERE proyecto_id = ? AND activo = 1 ORDER BY nombre',
-    ['evaluar']
-  );
+  const integsResult = await db.execute({
+    sql: 'SELECT * FROM integraciones WHERE proyecto_id = ? AND activo = 1 ORDER BY nombre',
+    args: ['evaluar']
+  });
   const integraciones = integsResult.rows || [];
 
   // Para cada integración, obtener la última ejecución
   const integracionesConDatos = await Promise.all(integraciones.map(async (integracion) => {
-    const ejecResult = await db.execute(
-      'SELECT * FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 1',
-      [integracion.id]
-    );
+    const ejecResult = await db.execute({
+      sql: 'SELECT * FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 1',
+      args: [integracion.id]
+    });
     const ultimaEjecucion = ejecResult.rows[0];
     
     return {

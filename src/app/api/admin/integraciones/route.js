@@ -7,7 +7,10 @@ import { getDatabase } from '@/lib/db-client';
 export async function GET() {
   try {
     const db = getDatabase();
-    const result = await db.execute('SELECT * FROM integraciones ORDER BY nombre');
+    const result = await db.execute({
+      sql: 'SELECT * FROM integraciones ORDER BY nombre',
+      args: []
+    });
     const integraciones = result.rows || [];
 
     return Response.json({
@@ -41,20 +44,20 @@ export async function POST(request) {
 
     // Generar ID único
     const prefix = proyecto_id.substring(0, 5).toUpperCase();
-    const existingResult = await db.execute(
-      'SELECT COUNT(*) as count FROM integraciones WHERE proyecto_id = ?',
-      [proyecto_id]
-    );
+    const existingResult = await db.execute({
+      sql: 'SELECT COUNT(*) as count FROM integraciones WHERE proyecto_id = ?',
+      args: [proyecto_id]
+    });
     const count = existingResult.rows[0]?.count || 0;
     const nextNum = String(count + 1).padStart(3, '0');
     const id = `${prefix}-QAS-${nextNum}`;
 
     // Crear integración
-    await db.execute(
-      `INSERT INTO integraciones (id, proyecto_id, nombre, descripcion, intervalo, criticidad, estado, activo)
+    await db.execute({
+      sql: `INSERT INTO integraciones (id, proyecto_id, nombre, descripcion, intervalo, criticidad, estado, activo)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, proyecto_id, nombre, descripcion || '', intervalo || 600000, criticidad || 'media', 'success', 1]
-    );
+      args: [id, proyecto_id, nombre, descripcion || '', intervalo || 600000, criticidad || 'media', 'success', 1]
+    });
 
     return Response.json({
       success: true,
@@ -87,7 +90,10 @@ export async function DELETE(request) {
     const db = getDatabase();
 
     // Eliminar integración (cascade eliminará ejecuciones y logs)
-    await db.execute('DELETE FROM integraciones WHERE id = ?', [id]);
+    await db.execute({
+      sql: 'DELETE FROM integraciones WHERE id = ?',
+      args: [id]
+    });
 
     return Response.json({
       success: true,

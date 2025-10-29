@@ -6,6 +6,8 @@ import MetricsPanel from '@/components/MetricsPanel';
 import LogsViewer from '@/components/LogsViewer';
 import AdminPanel from '@/components/AdminPanel';
 import LogMonitor from '@/components/LogMonitor';
+import GroovyScriptTester from '@/components/GroovyScriptTester';
+import IntegrationGuide from '@/components/IntegrationGuide';
 
 export default function Home() {
   const [proyectoActivo, setProyectoActivo] = useState('evaluar');
@@ -89,6 +91,8 @@ export default function Home() {
             { id: 'metrics', label: '📈 Métricas', icon: '📈' },
             { id: 'logs', label: '📋 Logs', icon: '📋' },
             { id: 'realtime', label: '🔴 Logs Real-Time', icon: '🔴' },
+            { id: 'groovy', label: '🔧 Groovy Scripts', icon: '🔧' },
+            { id: 'integration', label: '📘 Guía CPI', icon: '📘' },
             { id: 'admin', label: '⚙️ Admin', icon: '⚙️' }
           ].map((vista) => (
             <button
@@ -131,6 +135,14 @@ export default function Home() {
 
         {vistaActiva === 'realtime' && (
           <LogMonitor />
+        )}
+
+        {vistaActiva === 'groovy' && (
+          <GroovyScriptTester />
+        )}
+
+        {vistaActiva === 'integration' && (
+          <IntegrationGuide />
         )}
 
         {vistaActiva === 'admin' && (

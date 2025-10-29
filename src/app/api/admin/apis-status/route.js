@@ -8,7 +8,10 @@ export async function GET() {
     const db = getDatabase();
 
     // Obtener todas las integraciones
-    const integsResult = await db.execute('SELECT * FROM integraciones ORDER BY nombre');
+    const integsResult = await db.execute({
+      sql: 'SELECT * FROM integraciones ORDER BY nombre',
+      args: []
+    });
     const integraciones = integsResult.rows || [];
 
     // Definir todas las APIs del sistema
@@ -30,10 +33,13 @@ export async function GET() {
     ];
 
     // Obtener APIs genéricas dinámicas
-    const genericResult = await db.execute(`
+    const genericResult = await db.execute({
+      sql: `
       SELECT DISTINCT id as nombre FROM integraciones 
       WHERE id LIKE 'API-%'
-    `);
+    `,
+      args: []
+    });
     const genericAPIs = genericResult.rows || [];
 
     genericAPIs.forEach(api => {

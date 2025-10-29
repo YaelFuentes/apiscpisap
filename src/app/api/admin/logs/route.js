@@ -37,7 +37,10 @@ export async function GET(request) {
     query += ' ORDER BY l.timestamp DESC LIMIT ?';
     params.push(limit);
 
-    const result = await db.execute(query, params);
+    const result = await db.execute({
+      sql: query,
+      args: params
+    });
     const logs = result.rows || [];
 
     return Response.json({
@@ -50,6 +53,32 @@ export async function GET(request) {
     console.error('Error obteniendo logs:', error);
     return Response.json(
       { error: 'Error obteniendo logs', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Eliminar TODOS los logs
+export async function DELETE(request) {
+  try {
+    const db = getDatabase();
+
+    // Eliminar todos los logs
+    const result = await db.execute({
+      sql: 'DELETE FROM logs',
+      args: []
+    });
+
+    return Response.json({
+      success: true,
+      deletedCount: result.rowsAffected || 0,
+      message: 'Todos los logs han sido eliminados'
+    });
+
+  } catch (error) {
+    console.error('Error eliminando todos los logs:', error);
+    return Response.json(
+      { error: 'Error al eliminar los logs', details: error.message },
       { status: 500 }
     );
   }

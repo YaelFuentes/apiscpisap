@@ -23,16 +23,16 @@ export async function POST(request) {
     const cutoffISO = cutoffDate.toISOString();
 
     // Eliminar logs antiguos
-    const logsResult = await db.execute(
-      'DELETE FROM logs WHERE timestamp < ?',
-      [cutoffISO]
-    );
+    const logsResult = await db.execute({
+      sql: 'DELETE FROM logs WHERE timestamp < ?',
+      args: [cutoffISO]
+    });
 
     // Eliminar ejecuciones antiguas
-    const ejecResult = await db.execute(
-      'DELETE FROM ejecuciones WHERE fecha_inicio < ?',
-      [cutoffISO]
-    );
+    const ejecResult = await db.execute({
+      sql: 'DELETE FROM ejecuciones WHERE fecha_inicio < ?',
+      args: [cutoffISO]
+    });
 
     const deletedLogs = logsResult.rowsAffected || 0;
     const deletedEjecuciones = ejecResult.rowsAffected || 0;

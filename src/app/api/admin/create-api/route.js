@@ -20,24 +20,27 @@ export async function POST(request) {
     const db = getDatabase();
 
     // Verificar si proyecto "generic" existe
-    const proyectoResult = await db.execute('SELECT * FROM proyectos WHERE id = ?', ['generic']);
+    const proyectoResult = await db.execute({
+      sql: 'SELECT * FROM proyectos WHERE id = ?',
+      args: ['generic']
+    });
     
     // Crear proyecto "generic" si no existe
     if (!proyectoResult.rows || proyectoResult.rows.length === 0) {
-      await db.execute(
-        `INSERT INTO proyectos (id, nombre, descripcion, ambiente, protocolo, color)
+      await db.execute({
+        sql: `INSERT INTO proyectos (id, nombre, descripcion, ambiente, protocolo, color)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        ['generic', 'APIs Genéricas', 'APIs creadas dinámicamente para recibir datos', 'QAS', 'HTTPS', 'from-gray-500 to-zinc-500']
-      );
+        args: ['generic', 'APIs Genéricas', 'APIs creadas dinámicamente para recibir datos', 'QAS', 'HTTPS', 'from-gray-500 to-zinc-500']
+      });
     }
 
     // Crear integración para esta API
     const apiId = `API-${nombreLimpio.toUpperCase()}`;
     
-    await db.execute(
-      `INSERT INTO integraciones (id, proyecto_id, nombre, descripcion, intervalo, criticidad, estado, activo)
+    await db.execute({
+      sql: `INSERT INTO integraciones (id, proyecto_id, nombre, descripcion, intervalo, criticidad, estado, activo)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      args: [
         apiId,
         'generic',
         `API Genérica: ${nombre}`,
