@@ -7,11 +7,15 @@ import { useState, useEffect, useCallback } from 'react';
 export default function LogMonitor() {
   const [logs, setLogs] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('ALL');
+  const [filtroSistema, setFiltroSistema] = useState('ALL');
+  const [filtroIntegracion, setFiltroIntegracion] = useState('ALL');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState(new Set());
   const [deleting, setDeleting] = useState(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [sistemas, setSistemas] = useState([]);
+  const [tiposIntegracion, setTiposIntegracion] = useState([]);
 
   // Función para obtener logs
   const fetchLogs = useCallback(async () => {
@@ -21,6 +25,8 @@ export default function LogMonitor() {
     try {
       const params = new URLSearchParams();
       if (filtroTipo !== 'ALL') params.append('tipo', filtroTipo);
+      if (filtroSistema !== 'ALL') params.append('sistema', filtroSistema);
+      if (filtroIntegracion !== 'ALL') params.append('tipoIntegracion', filtroIntegracion);
       params.append('limit', '100');
 
       const response = await fetch(`/api/admin/logs?${params}`);
@@ -28,13 +34,37 @@ export default function LogMonitor() {
       
       if (data.logs) {
         setLogs(data.logs);
+        
+        // Extraer sistemas y tipos de integración únicos de los logs
+        const sistemasSet = new Set();
+        const tiposSet = new Set();
+        
+        data.logs.forEach(log => {
+          try {
+            const detalles = typeof log.detalles === 'string' 
+              ? JSON.parse(log.detalles) 
+              : log.detalles;
+            
+            if (detalles?.apiInfo?.sistema) {
+              sistemasSet.add(detalles.apiInfo.sistema);
+            }
+            if (detalles?.apiInfo?.tipoIntegracion) {
+              tiposSet.add(detalles.apiInfo.tipoIntegracion);
+            }
+          } catch (e) {
+            // Ignorar errores de parseo
+          }
+        });
+        
+        setSistemas(Array.from(sistemasSet).sort());
+        setTiposIntegracion(Array.from(tiposSet).sort());
       }
     } catch (error) {
       console.error('Error fetching logs:', error);
     } finally {
       setLoading(false);
     }
-  }, [filtroTipo, loading]);
+  }, [filtroTipo, filtroSistema, filtroIntegracion, loading]);
 
   // Función para eliminar un log
   const deleteLog = async (logId, e) => {
@@ -217,17 +247,39 @@ export default function LogMonitor() {
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <select
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
             className="px-3 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg"
           >
-            <option value="ALL">Todos los tipos</option>
+            <option value="ALL">📋 Todos los tipos</option>
             <option value="SUCCESS">✓ Success</option>
             <option value="ERROR">✕ Error</option>
             <option value="WARNING">⚠ Warning</option>
             <option value="INFO">ℹ Info</option>
+          </select>
+          
+          <select
+            value={filtroSistema}
+            onChange={(e) => setFiltroSistema(e.target.value)}
+            className="px-3 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg"
+          >
+            <option value="ALL">🏢 Todos los sistemas</option>
+            {sistemas.map(sistema => (
+              <option key={sistema} value={sistema}>{sistema}</option>
+            ))}
+          </select>
+          
+          <select
+            value={filtroIntegracion}
+            onChange={(e) => setFiltroIntegracion(e.target.value)}
+            className="px-3 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-lg"
+          >
+            <option value="ALL">🔧 Todos los tipos</option>
+            {tiposIntegracion.map(tipo => (
+              <option key={tipo} value={tipo}>{tipo}</option>
+            ))}
           </select>
         </div>
       </div>

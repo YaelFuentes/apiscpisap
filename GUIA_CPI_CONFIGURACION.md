@@ -24,7 +24,16 @@ def Message processData(Message message) {
     try {
         // Obtener información del mensaje
         def headers = message.getHeaders()
+        def properties = message.getProperties()
         def body = message.getBody(String.class)
+        
+        // Capturar properties personalizadas (filtrar las de Camel)
+        def customProperties = [:]
+        properties.each { key, value ->
+            if (!key.startsWith("CamelHttp") && !key.startsWith("Camel")) {
+                customProperties[key] = value?.toString()
+            }
+        }
         
         // Crear el objeto de log
         def logData = [
@@ -34,9 +43,10 @@ def Message processData(Message message) {
             nivel: 'SUCCESS',
             detalles: [
                 timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-                bodySize: body?.length() ?: 0,
-                headers: headers.collectEntries { k, v -> [k, v.toString()] }
-            ]
+                bodySize: body?.length() ?: 0
+            ],
+            properties: customProperties,
+            headers: headers.collectEntries { k, v -> [k, v?.toString()] }
         ]
         
         // Convertir a JSON String
@@ -153,6 +163,15 @@ Misma configuración que antes.
   "detalles": {
     "timestamp": "2024-01-01T12:00:00Z",
     "cualquier": "otro campo"
+  },
+  "properties": {
+    "correlationId": "ABC-123",
+    "businessKey": "ORDER-456",
+    "customField": "valor personalizado"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Custom-Header": "valor"
   }
 }
 ```
@@ -164,6 +183,10 @@ Misma configuración que antes.
 - `mensaje` (requerido): Mensaje principal del log
 - `nivel` (opcional): SUCCESS, INFO, WARNING, ERROR (se auto-detecta si no se especifica)
 - `detalles` (opcional): Objeto con información adicional
+- `properties` (opcional): Properties del mensaje de CPI que quieras guardar
+- `headers` (opcional): Headers del mensaje de CPI
+
+**Nota**: La API también captura automáticamente todos los headers HTTP de la petición.
 
 ---
 

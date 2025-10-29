@@ -235,6 +235,25 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Tabla: apis_personalizadas (nuevas APIs dinámicas por sistema)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS apis_personalizadas (
+        id TEXT PRIMARY KEY,
+        sistema TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        tipo_integracion TEXT NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        proyecto_id TEXT NOT NULL,
+        integracion_id TEXT NOT NULL,
+        activo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+        FOREIGN KEY (integracion_id) REFERENCES integraciones(id) ON DELETE CASCADE
+      )
+    `);
+
     // Índices para mejorar rendimiento
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ejecuciones_integracion ON ejecuciones(integracion_id)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ejecuciones_fecha ON ejecuciones(fecha_inicio)`);
@@ -243,6 +262,8 @@ export async function initializeDatabase() {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_logs_tipo ON logs(tipo)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_metricas_horarias_fecha ON metricas_horarias(fecha_hora)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_alertas_estado ON alertas(estado)`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_apis_sistema ON apis_personalizadas(sistema)`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_apis_endpoint ON apis_personalizadas(endpoint)`);
 
     console.log('✅ Base de datos Turso inicializada correctamente');
   } catch (error) {

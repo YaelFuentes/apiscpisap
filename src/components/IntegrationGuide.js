@@ -48,6 +48,11 @@ export default function IntegrationGuide() {
   "datos": {
     "registros": 150,
     "tiempo": "2.5s"
+  },
+  "properties": {
+    "correlationId": "ABC123",
+    "businessKey": "ORDER-456",
+    "customField": "valor personalizado"
   }
 }`;
 
@@ -60,14 +65,27 @@ import groovy.json.*
 
 Message processData(Message message) {
     def body = message.getBody(String)
+    def headers = message.getHeaders()
+    def properties = message.getProperties()
     
-    // Preparar log
+    // Capturar properties específicas
+    def customProperties = [:]
+    properties.each { key, value ->
+        // Filtrar solo las properties que te interesan
+        if (!key.startsWith("CamelHttp") && !key.startsWith("Camel")) {
+            customProperties[key] = value?.toString()
+        }
+    }
+    
+    // Preparar log con headers y properties
     def logData = [
         integracionId: "SSFF-TEACHLR-ATLAS",
         proyecto: "teachlr",
         mensaje: "Integración completada",
         nivel: "SUCCESS",
-        datos: body
+        datos: body,
+        properties: customProperties,
+        headers: headers.collectEntries { k, v -> [k, v?.toString()] }
     ]
     
     // ⚠️ IMPORTANTE: Guardar en PROPIEDAD (no en body)

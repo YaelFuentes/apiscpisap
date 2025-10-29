@@ -7,6 +7,8 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const tipo = searchParams.get('tipo');
+    const sistema = searchParams.get('sistema');
+    const tipoIntegracion = searchParams.get('tipoIntegracion');
     const limit = parseInt(searchParams.get('limit') || '100');
     const integracionId = searchParams.get('integracionId');
 
@@ -41,12 +43,40 @@ export async function GET(request) {
       sql: query,
       args: params
     });
-    const logs = result.rows || [];
+    let logs = result.rows || [];
+    
+    // Filtrar por sistema y tipo de integración (post-procesamiento)
+    // Esto es necesario porque están dentro del JSON de detalles
+    if (sistema && sistema !== 'ALL') {
+      logs = logs.filter(log => {
+        try {
+          const detalles = typeof log.detalles === 'string' 
+            ? JSON.parse(log.detalles) 
+            : log.detalles;
+          return detalles?.apiInfo?.sistema === sistema;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+    
+    if (tipoIntegracion && tipoIntegracion !== 'ALL') {
+      logs = logs.filter(log => {
+        try {
+          const detalles = typeof log.detalles === 'string' 
+            ? JSON.parse(log.detalles) 
+            : log.detalles;
+          return detalles?.apiInfo?.tipoIntegracion === tipoIntegracion;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
 
     return Response.json({
       logs,
       total: logs.length,
-      filtros: { tipo, integracionId, limit }
+      filtros: { tipo, sistema, tipoIntegracion, integracionId, limit }
     });
 
   } catch (error) {

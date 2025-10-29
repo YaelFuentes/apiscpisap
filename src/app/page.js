@@ -8,6 +8,7 @@ import AdminPanel from '@/components/AdminPanel';
 import LogMonitor from '@/components/LogMonitor';
 import GroovyScriptTester from '@/components/GroovyScriptTester';
 import IntegrationGuide from '@/components/IntegrationGuide';
+import APIManager from '@/components/APIManager';
 
 export default function Home() {
   const [proyectoActivo, setProyectoActivo] = useState('evaluar');
@@ -91,6 +92,7 @@ export default function Home() {
             { id: 'metrics', label: '📈 Métricas', icon: '📈' },
             { id: 'logs', label: '📋 Logs', icon: '📋' },
             { id: 'realtime', label: '🔴 Logs Real-Time', icon: '🔴' },
+            { id: 'apis', label: '🔌 APIs por Sistema', icon: '🔌' },
             { id: 'groovy', label: '🔧 Groovy Scripts', icon: '🔧' },
             { id: 'integration', label: '📘 Guía CPI', icon: '📘' },
             { id: 'admin', label: '⚙️ Admin', icon: '⚙️' }
@@ -135,6 +137,10 @@ export default function Home() {
 
         {vistaActiva === 'realtime' && (
           <LogMonitor />
+        )}
+
+        {vistaActiva === 'apis' && (
+          <APIManager />
         )}
 
         {vistaActiva === 'groovy' && (
