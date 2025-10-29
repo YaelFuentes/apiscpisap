@@ -50,16 +50,17 @@ export async function POST(request) {
         'success',
         1
       ]
-    );
+    });
 
-    // Crear el archivo de la API
-    await createAPIFile(nombreLimpio, apiId, formato || 'JSON');
+    // NOTA: En Vercel (serverless) no se pueden crear archivos dinámicamente
+    // La API está registrada en la base de datos solamente
 
     return Response.json({
       success: true,
       endpoint: `/api/generic/${nombreLimpio}`,
       apiId,
-      mensaje: 'API genérica creada exitosamente'
+      mensaje: 'API genérica registrada exitosamente',
+      nota: 'La API está registrada en la base de datos. Para crear el endpoint físico, debes crearlo manualmente en: src/app/api/generic/' + nombreLimpio + '/route.js'
     });
 
   } catch (error) {
@@ -71,129 +72,3 @@ export async function POST(request) {
   }
 }
 
-// Función para crear el archivo de la API dinámicamente
-async function createAPIFile(nombre, apiId, formato) {
-  const fs = await import('fs');
-  const path = await import('path');
-
-  const apiDir = path.join(process.cwd(), 'src', 'app', 'api', 'generic', nombre);
-  const routeFile = path.join(apiDir, 'route.js');
-
-  // Crear directorio si no existe
-  if (!fs.existsSync(apiDir)) {
-    fs.mkdirSync(apiDir, { recursive: true });
-  }
-
-  // Contenido del archivo de la API
-  const content = `// API Genérica: ${nombre}
-// Creada automáticamente - Recibe ${formato.toUpperCase()}
-
-import { getDatabase } from '@/lib/db-client';
-
-// GET - Obtener últimas ejecuciones
-export async function GET() {
-  try {
-    const db = getDatabase();
-    const result = await db.execute(
-      'SELECT * FROM ejecuciones WHERE integracion_id = ? ORDER BY fecha_inicio DESC LIMIT 20',
-      ['${apiId}']
-    );
-    const ejecuciones = result.rows || [];
-    
-    return Response.json({
-      api: '${nombre}',
-      apiId: '${apiId}',
-      formato: '${formato}',
-      ejecuciones,
-      total: ejecuciones.length
-    });
-  } catch (error) {
-    console.error('Error en GET ${nombre}:', error);
-    return Response.json({ error: 'Error obteniendo datos' }, { status: 500 });
-  }
-}
-
-// POST - Recibir datos (JSON o XML)
-export async function POST(request) {
-  try {
-    const contentType = request.headers.get('content-type') || '';
-    let data;
-    let tipo = 'json';
-    
-    if (contentType.includes('application/json')) {
-      data = await request.json();
-      tipo = 'json';
-    } else if (contentType.includes('application/xml') || contentType.includes('text/xml')) {
-      data = await request.text();
-      tipo = 'xml';
-    } else {
-      data = await request.text();
-      tipo = 'text';
-    }
-    
-    const db = getDatabase();
-    
-    // Crear ejecución
-    const correlationId = \`CORR-\${apiId}-\${Date.now()}\`;
-    const now = new Date().toISOString();
-    
-    const ejecResult = await db.execute(
-      \`INSERT INTO ejecuciones (integracion_id, estado, fecha_inicio, fecha_fin, duracion, 
-        mensajes_procesados, mensajes_exitosos, mensajes_fallidos, errores, correlation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\`,
-      ['${apiId}', 'success', now, now, 0, 1, 1, 0, 0, correlationId]
-    );
-    
-    // Crear log
-    await db.execute(
-      \`INSERT INTO logs (integracion_id, ejecucion_id, tipo, mensaje, detalles, correlation_id)
-       VALUES (?, ?, ?, ?, ?, ?)\`,
-      [
-        '${apiId}',
-        ejecResult.lastInsertRowid,
-        'SUCCESS',
-        \`Datos recibidos en formato \${tipo}\`,
-        JSON.stringify({ 
-          contentType, 
-          dataSize: typeof data === 'string' ? data.length : JSON.stringify(data).length 
-        }),
-        correlationId
-      ]
-    );
-    
-    return Response.json({
-      success: true,
-      mensaje: 'Datos recibidos exitosamente',
-      correlationId,
-      formato: tipo,
-      timestamp: now
-    });
-    
-  } catch (error) {
-    console.error('Error en POST ${nombre}:', error);
-    
-    // Registrar error
-    try {
-      const db = getDatabase();
-      await db.execute(
-        \`INSERT INTO logs (integracion_id, tipo, mensaje, correlation_id)
-         VALUES (?, ?, ?, ?)\`,
-        ['${apiId}', 'ERROR', \`Error procesando datos: \${error.message}\`, \`ERROR-\${Date.now()}\`]
-      );
-    } catch (logError) {
-      console.error('Error registrando log:', logError);
-    }
-    
-    return Response.json(
-      { error: 'Error procesando datos', detalles: error.message },
-      { status: 500 }
-    );
-  }
-}
-`;
-
-  // Escribir archivo
-  fs.writeFileSync(routeFile, content, 'utf-8');
-  
-  console.log(`✅ API creada: ${routeFile}`);
-}
