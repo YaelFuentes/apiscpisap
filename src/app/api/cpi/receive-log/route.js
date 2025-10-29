@@ -8,7 +8,17 @@ export async function POST(request) {
   let db;
   
   try {
+    console.log('🔵 ============================================');
     console.log('🔵 Inicio - Recibiendo petición en /api/cpi/receive-log');
+    console.log('🔵 Timestamp:', new Date().toISOString());
+    console.log('🔵 ============================================');
+    
+    // Validar variables de entorno
+    if (!process.env.database_TURSO_DATABASE_URL || !process.env.database_TURSO_AUTH_TOKEN) {
+      console.error('❌ Variables de entorno NO configuradas');
+      throw new Error('Base de datos no configurada correctamente');
+    }
+    console.log('✅ Variables de entorno validadas');
     
     const contentType = request.headers.get('content-type') || '';
     console.log('📥 Content-Type:', contentType);
@@ -44,8 +54,13 @@ export async function POST(request) {
     }
 
     console.log('🔗 Obteniendo conexión a base de datos...');
-    db = getDatabase();
-    console.log('✅ Conexión obtenida');
+    try {
+      db = getDatabase();
+      console.log('✅ Conexión obtenida');
+    } catch (dbError) {
+      console.error('❌ Error fatal obteniendo conexión DB:', dbError);
+      throw new Error(`Error de base de datos: ${dbError.message}`);
+    }
     
     // Extraer información del mensaje
     const mensaje = bodyRaw || 'Sin contenido';
@@ -231,16 +246,36 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('❌ ERROR CRÍTICO en /api/cpi/receive-log:', error);
-    console.error('Stack:', error.stack);
+    console.error('❌ Mensaje:', error.message);
+    console.error('❌ Stack:', error.stack);
+    console.error('❌ Nombre:', error.name);
+    
+    // Intentar cerrar la conexión de DB si está abierta
+    if (db) {
+      try {
+        // Turso no necesita cerrar conexión explícitamente
+      } catch (dbError) {
+        console.error('❌ Error cerrando DB:', dbError);
+      }
+    }
     
     return Response.json(
       { 
         success: false,
         error: 'Error procesando log', 
         details: error.message,
+        errorName: error.name,
+        timestamp: new Date().toISOString(),
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
     );
   }
 }

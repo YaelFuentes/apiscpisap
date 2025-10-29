@@ -99,7 +99,7 @@ export default function LogMonitor() {
     fetchLogs();
     
     if (autoRefresh) {
-      const interval = setInterval(fetchLogs, 5000);
+      const interval = setInterval(fetchLogs, 1000); // Actualización cada 1 segundo
       return () => clearInterval(interval);
     }
   }, [autoRefresh, fetchLogs]);

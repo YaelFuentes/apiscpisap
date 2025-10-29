@@ -70,10 +70,16 @@ Message processData(Message message) {
         datos: body
     ]
     
-    // Enviar a API (configurar HTTP Receiver)
-    message.setBody(JsonOutput.toJson(logData))
+    // ⚠️ IMPORTANTE: Guardar en PROPIEDAD (no en body)
+    // Esto evita el error: GStringImpl cannot convert to InputStream
+    message.setProperty("logPayload", JsonOutput.toJson(logData))
+    
     return message
-}`;
+}
+
+// Después de este script, agregar Content Modifier:
+// - Message Body: Type=Expression, Body=\${property.logPayload}
+// - Message Header: Name=Content-Type, Value=application/json`;
 
   return (
     <div className="space-y-6">
@@ -199,23 +205,38 @@ Message processData(Message message) {
         <h3 className="text-xl font-bold text-white mb-4">🔧 Configuración en SAP CPI</h3>
         
         <div className="space-y-4">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4">
+            <h4 className="font-semibold text-amber-400 mb-2">⚠️ IMPORTANTE: Usar Content Modifier</h4>
+            <div className="text-sm text-zinc-300 space-y-2">
+              <p className="font-semibold">Si recibes el error: <code className="bg-zinc-800 px-1 rounded text-red-400">GStringImpl cannot convert to InputStream</code></p>
+              <p className="mt-2">Debes agregar un <strong>Content Modifier</strong> después del Groovy Script y antes del HTTP Receiver:</p>
+              <ol className="list-decimal list-inside mt-2 space-y-1 ml-2">
+                <li>En Groovy: guarda el JSON en una propiedad: <code className="bg-zinc-800 px-1 rounded">message.setProperty("logPayload", JsonOutput.toJson(logData))</code></li>
+                <li>Agrega <strong>Content Modifier</strong> después del Groovy Script</li>
+                <li>En Message Body: Type = <code className="bg-zinc-800 px-1 rounded">Expression</code>, Body = <code className="bg-zinc-800 px-1 rounded">${`\${property.logPayload}`}</code></li>
+                <li>En Message Header: Name = <code className="bg-zinc-800 px-1 rounded">Content-Type</code>, Value = <code className="bg-zinc-800 px-1 rounded">application/json</code></li>
+              </ol>
+            </div>
+          </div>
+
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
             <h4 className="font-semibold text-blue-400 mb-2">✅ Para flujos SUCCESS:</h4>
             <ol className="list-decimal list-inside text-sm text-zinc-300 space-y-1">
-              <li>Agregar <strong>Request Reply</strong> al final del flujo exitoso</li>
-              <li>Configurar HTTP Receiver con URL: <code className="bg-zinc-800 px-2 py-0.5 rounded">/api/cpi/receive-log</code></li>
+              <li>Agregar <strong>Groovy Script</strong> (guarda JSON en propiedad)</li>
+              <li>Agregar <strong>Content Modifier</strong> (lee la propiedad)</li>
+              <li>Agregar <strong>Request Reply</strong> con HTTP Receiver</li>
+              <li>URL: <code className="bg-zinc-800 px-2 py-0.5 rounded">/api/cpi/receive-log</code></li>
               <li>Método: POST, Content-Type: application/json</li>
-              <li>Body con nivel: <code className="bg-zinc-800 px-2 py-0.5 rounded">"SUCCESS"</code></li>
             </ol>
           </div>
 
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
             <h4 className="font-semibold text-red-400 mb-2">❌ Para Exception Handler:</h4>
             <ol className="list-decimal list-inside text-sm text-zinc-300 space-y-1">
-              <li>En el subprocess de Exception, agregar <strong>Request Reply</strong></li>
-              <li>Misma configuración HTTP Receiver</li>
+              <li>En el subprocess de Exception: <strong>Groovy Script</strong> (captura error)</li>
+              <li>Agregar <strong>Content Modifier</strong> (lee propiedad de error)</li>
+              <li>Agregar <strong>Request Reply</strong> con mismo HTTP Receiver</li>
               <li>Body con nivel: <code className="bg-zinc-800 px-2 py-0.5 rounded">"ERROR"</code></li>
-              <li>Incluir mensaje de error: <code className="bg-zinc-800 px-2 py-0.5 rounded">$&#123;exception.message&#125;</code></li>
             </ol>
           </div>
         </div>
