@@ -12,12 +12,17 @@ export async function POST(request, { params }) {
   try {
     console.log('🔵 ============================================');
     console.log('🔵 API Sistema - Recibiendo petición');
-    console.log('🔵 Sistema:', params.sistema);
-    console.log('🔵 Tipo:', params.tipo);
+    console.log('🔵 Sistema (raw):', params.sistema);
+    console.log('🔵 Tipo (raw):', params.tipo);
     console.log('🔵 Timestamp:', new Date().toISOString());
     console.log('🔵 ============================================');
     
-    const { sistema, tipo } = params;
+    // Normalizar parámetros (siempre en minúsculas para coincidir con el endpoint guardado)
+    const sistema = params.sistema?.toLowerCase() || '';
+    const tipo = params.tipo?.toLowerCase() || '';
+    
+    console.log('🔵 Sistema (normalizado):', sistema);
+    console.log('🔵 Tipo (normalizado):', tipo);
     
     // Validar variables de entorno
     if (!process.env.database_TURSO_DATABASE_URL || !process.env.database_TURSO_AUTH_TOKEN) {
@@ -260,7 +265,9 @@ export async function POST(request, { params }) {
 // GET - Información sobre esta API
 export async function GET(request, { params }) {
   try {
-    const { sistema, tipo } = params;
+    // Normalizar parámetros (siempre en minúsculas)
+    const sistema = params.sistema?.toLowerCase() || '';
+    const tipo = params.tipo?.toLowerCase() || '';
     const endpoint = `/api/systems/${sistema}/${tipo}`;
     
     const db = getDatabase();
