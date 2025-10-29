@@ -431,15 +431,14 @@ export default function LogMonitor() {
 
       {/* Lista de logs */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-        <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-900">
-          {logs.length === 0 ? (
-            <div className="p-8 text-center text-zinc-500">
-              <div className="text-4xl mb-2">📭</div>
-              <div>No hay logs para mostrar</div>
-              <div className="text-sm mt-1">Los logs aparecerán aquí en tiempo real</div>
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-800">
+        {logs.length === 0 ? (
+          <div className="p-8 text-center text-zinc-500">
+            <div className="text-4xl mb-2">📭</div>
+            <div>No hay logs para mostrar</div>
+            <div className="text-sm mt-1">Los logs aparecerán aquí en tiempo real</div>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
               {logs.map((log, index) => {
                 const detalles = parseDetalles(log.detalles);
                 const logId = log.id || `log-${index}`;
@@ -584,7 +583,7 @@ export default function LogMonitor() {
                             </div>
                           )}
                           
-                          <div className="bg-black rounded-lg p-4 overflow-x-auto" style={{ maxHeight: '500px' }}>
+                          <div className="bg-black rounded-lg p-4 overflow-x-auto">
                             <pre className="text-sm text-green-400 whitespace-pre-wrap break-words">
                               {formattedBodies.has(logId) 
                                 ? formattedBodies.get(logId).formatted 
@@ -781,9 +780,8 @@ export default function LogMonitor() {
                   </div>
                 );
               })}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Footer con info */}
