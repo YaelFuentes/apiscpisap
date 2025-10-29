@@ -14,6 +14,7 @@ export default function LogMonitor() {
   const [expandedLogs, setExpandedLogs] = useState(new Set());
   const [showHeadersFor, setShowHeadersFor] = useState(new Set()); // Para controlar visibilidad de headers por log
   const [showPropertiesFor, setShowPropertiesFor] = useState(new Set()); // Para controlar visibilidad de properties
+  const [formattedBodies, setFormattedBodies] = useState(new Map()); // Para almacenar bodies formateados
   const [deleting, setDeleting] = useState(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [sistemas, setSistemas] = useState([]);
@@ -172,6 +173,63 @@ export default function LogMonitor() {
         newSet.add(logId);
       }
       return newSet;
+    });
+  };
+
+  // Formatear body (JSON o XML)
+  const formatBody = (logId, body) => {
+    try {
+      // Intentar parsear como JSON
+      const parsed = JSON.parse(body);
+      const formatted = JSON.stringify(parsed, null, 2);
+      
+      setFormattedBodies(prev => {
+        const newMap = new Map(prev);
+        newMap.set(logId, { formatted, type: 'json' });
+        return newMap;
+      });
+    } catch (e) {
+      // Si no es JSON, intentar formatear como XML
+      try {
+        // Remover espacios en blanco extra
+        let xml = body.trim();
+        
+        // Formatear XML simple
+        let formatted = '';
+        let indent = 0;
+        const tab = '  ';
+        
+        xml.split(/>\s*</).forEach((node, index, array) => {
+          if (index > 0) node = '<' + node;
+          if (index < array.length - 1) node = node + '>';
+          
+          if (node.match(/^<\/\w/)) indent--; // Closing tag
+          formatted += tab.repeat(indent) + node + '\n';
+          if (node.match(/^<\w[^>]*[^\/]>$/)) indent++; // Opening tag
+        });
+        
+        setFormattedBodies(prev => {
+          const newMap = new Map(prev);
+          newMap.set(logId, { formatted: formatted.trim(), type: 'xml' });
+          return newMap;
+        });
+      } catch (xmlError) {
+        // Si no es ni JSON ni XML, dejar como está
+        setFormattedBodies(prev => {
+          const newMap = new Map(prev);
+          newMap.set(logId, { formatted: body, type: 'text' });
+          return newMap;
+        });
+      }
+    }
+  };
+
+  // Resetear formato del body
+  const resetBodyFormat = (logId) => {
+    setFormattedBodies(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(logId);
+      return newMap;
     });
   };
 
@@ -445,12 +503,47 @@ export default function LogMonitor() {
                       <div className="px-4 pb-4 space-y-3 bg-black/20">
                         {/* PRIORIDAD 1: Body del mensaje (siempre visible cuando está expandido) */}
                         <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-2 border-blue-500/40 rounded-lg p-4">
-                          <h4 className="text-lg font-bold text-blue-300 mb-3 flex items-center gap-2">
-                            📄 Contenido del Mensaje (Body)
-                          </h4>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-lg font-bold text-blue-300 flex items-center gap-2">
+                              📄 Contenido del Mensaje (Body)
+                            </h4>
+                            <div className="flex gap-2">
+                              {formattedBodies.has(logId) ? (
+                                <button
+                                  onClick={() => resetBodyFormat(logId)}
+                                  className="px-3 py-1 bg-zinc-600 hover:bg-zinc-500 text-white rounded text-xs font-medium transition"
+                                >
+                                  📝 Ver Original
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => formatBody(logId, log.mensaje)}
+                                  className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs font-medium transition"
+                                >
+                                  ✨ Formatear
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(formattedBodies.has(logId) ? formattedBodies.get(logId).formatted : log.mensaje);
+                                  alert('✅ Body copiado al portapapeles');
+                                }}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition"
+                              >
+                                📋 Copiar
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {formattedBodies.has(logId) && (
+                            <div className="mb-2 px-3 py-1 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-300">
+                              ✨ Formateado como {formattedBodies.get(logId).type.toUpperCase()}
+                            </div>
+                          )}
+                          
                           <div className="bg-black rounded-lg p-4 overflow-x-auto max-h-96">
                             <pre className="text-sm text-green-400 whitespace-pre-wrap break-words">
-                              {log.mensaje}
+                              {formattedBodies.has(logId) ? formattedBodies.get(logId).formatted : log.mensaje}
                             </pre>
                           </div>
                         </div>

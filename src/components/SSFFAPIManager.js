@@ -18,7 +18,7 @@ export default function SSFFAPIManager() {
     queryParams: '?$select=userId,event,eventReason,lastModifiedDateTime,employmentNav/personNav/nationalIdNav/personIdExternal,company,location&$expand=employmentNav/personNav/nationalIdNav,employmentNav/personNav,employmentNav'
   });
   
-  // Ejecutar consulta OData
+  // Ejecutar consulta OData (ahora desde el servidor)
   const handleExecute = async (e) => {
     e.preventDefault();
     
@@ -30,65 +30,41 @@ export default function SSFFAPIManager() {
     setEjecutando(true);
     setResultado(null);
     
-    const fullUrl = `${BASE_URL}${formData.entidad}${formData.queryParams}`;
-    
     try {
-      console.log('🔷 Ejecutando consulta SSFF:', fullUrl);
-      const startTime = Date.now();
+      console.log('🔷 Ejecutando consulta SSFF...');
       
-      // Crear credenciales en Base64
-      const credentials = btoa(`${USERNAME}:${PASSWORD}`);
-      
-      // Ejecutar la consulta OData
-      const response = await fetch(fullUrl, {
-        method: 'GET',
+      // Llamar al endpoint del servidor
+      const response = await fetch('/api/ssff/query', {
+        method: 'POST',
         headers: {
-          'Authorization': `Basic ${credentials}`,
-          'Accept': 'application/json',
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          entidad: formData.entidad,
+          queryParams: formData.queryParams
+        })
       });
-      
-      const duration = Date.now() - startTime;
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Error en respuesta SSFF:', response.status, errorText);
-        
-        setResultado({
-          success: false,
-          error: `Error HTTP ${response.status}`,
-          details: errorText,
-          duration,
-          url: fullUrl
-        });
-        return;
-      }
       
       const data = await response.json();
       
-      console.log('✅ Consulta SSFF exitosa');
-      console.log('📊 Registros:', data.d?.results?.length || 0);
-      console.log('⏱️ Duración:', duration + 'ms');
+      if (!response.ok || !data.success) {
+        console.error('❌ Error en respuesta:', data);
+        setResultado(data);
+        return;
+      }
       
-      setResultado({
-        success: true,
-        data: data.d || data,
-        count: data.d?.results?.length || 0,
-        duration,
-        url: fullUrl,
-        timestamp: new Date().toISOString()
-      });
+      console.log('✅ Consulta SSFF exitosa');
+      console.log('📊 Registros:', data.count);
+      
+      setResultado(data);
       
     } catch (error) {
       console.error('❌ Error ejecutando consulta SSFF:', error);
       
       setResultado({
         success: false,
-        error: 'Error ejecutando consulta OData',
-        details: error.message,
-        duration: Date.now() - Date.now(),
-        url: fullUrl
+        error: 'Error de red o servidor',
+        details: error.message
       });
     } finally {
       setEjecutando(false);
