@@ -12,6 +12,8 @@ export default function LogMonitor() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState(new Set());
+  const [showHeadersFor, setShowHeadersFor] = useState(new Set()); // Para controlar visibilidad de headers por log
+  const [showPropertiesFor, setShowPropertiesFor] = useState(new Set()); // Para controlar visibilidad de properties
   const [deleting, setDeleting] = useState(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [sistemas, setSistemas] = useState([]);
@@ -137,6 +139,32 @@ export default function LogMonitor() {
   // Toggle expandir/contraer log
   const toggleExpanded = (logId) => {
     setExpandedLogs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle mostrar/ocultar headers
+  const toggleHeaders = (logId) => {
+    setShowHeadersFor(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle mostrar/ocultar properties
+  const toggleProperties = (logId) => {
+    setShowPropertiesFor(prev => {
       const newSet = new Set(prev);
       if (newSet.has(logId)) {
         newSet.delete(logId);
@@ -415,6 +443,18 @@ export default function LogMonitor() {
                     {/* Detalles expandibles */}
                     {isExpanded && (
                       <div className="px-4 pb-4 space-y-3 bg-black/20">
+                        {/* PRIORIDAD 1: Body del mensaje (siempre visible cuando está expandido) */}
+                        <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-2 border-blue-500/40 rounded-lg p-4">
+                          <h4 className="text-lg font-bold text-blue-300 mb-3 flex items-center gap-2">
+                            📄 Contenido del Mensaje (Body)
+                          </h4>
+                          <div className="bg-black rounded-lg p-4 overflow-x-auto max-h-96">
+                            <pre className="text-sm text-green-400 whitespace-pre-wrap break-words">
+                              {log.mensaje}
+                            </pre>
+                          </div>
+                        </div>
+
                         {/* Información de la API (si es una API personalizada) */}
                         {detalles?.apiInfo && (
                           <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-4">
@@ -482,82 +522,70 @@ export default function LogMonitor() {
                                 <span className="text-xs text-white font-mono">{detalles.requestInfo.url}</span>
                               </div>
                             )}
+                            {detalles?.formato && (
+                              <div className="flex gap-2">
+                                <span className="text-xs text-zinc-500 min-w-[120px]">Formato:</span>
+                                <span className="text-xs text-white font-mono uppercase">{detalles.formato}</span>
+                              </div>
+                            )}
+                            {detalles?.bodySize && (
+                              <div className="flex gap-2">
+                                <span className="text-xs text-zinc-500 min-w-[120px]">Tamaño:</span>
+                                <span className="text-xs text-white font-mono">{detalles.bodySize} bytes</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        {/* Body del mensaje */}
-                        <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
-                          <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
-                            📄 Cuerpo del Mensaje (Body)
-                          </h4>
-                          <div className="bg-black/50 rounded p-3 overflow-x-auto">
-                            <pre className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
-                              {log.mensaje}
-                            </pre>
-                          </div>
-                        </div>
-
-                        {/* Detalles técnicos */}
-                        {detalles && (
-                          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
-                              🔧 Propiedades y Detalles Técnicos
-                            </h4>
-                            
-                            <div className="space-y-2 mb-3">
-                              {detalles.formato && (
-                                <div className="flex gap-2">
-                                  <span className="text-xs text-zinc-500 min-w-[120px]">Formato:</span>
-                                  <span className="text-xs text-white font-mono uppercase">{detalles.formato}</span>
-                                </div>
-                              )}
-                              {detalles.contentType && (
-                                <div className="flex gap-2">
-                                  <span className="text-xs text-zinc-500 min-w-[120px]">Content-Type:</span>
-                                  <span className="text-xs text-white font-mono">{detalles.contentType}</span>
-                                </div>
-                              )}
-                              {detalles.bodySize && (
-                                <div className="flex gap-2">
-                                  <span className="text-xs text-zinc-500 min-w-[120px]">Tamaño:</span>
-                                  <span className="text-xs text-white font-mono">{detalles.bodySize} bytes</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="bg-black/50 rounded p-3 overflow-x-auto">
-                              <pre className="text-xs text-zinc-400">
-                                {JSON.stringify(detalles, null, 2)}
-                              </pre>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Properties del Mensaje CPI */}
+                        {/* BOTÓN: Properties del Mensaje CPI (colapsable) */}
                         {detalles && detalles.properties && Object.keys(detalles.properties).length > 0 && (
                           <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
-                              🏷️ Properties del Mensaje CPI
-                            </h4>
-                            <div className="bg-black/50 rounded p-3 overflow-x-auto">
-                              <pre className="text-xs text-zinc-400">
-                                {JSON.stringify(detalles.properties, null, 2)}
-                              </pre>
-                            </div>
+                            <button
+                              onClick={() => toggleProperties(logId)}
+                              className="w-full flex items-center justify-between text-left hover:bg-zinc-800 p-2 rounded transition"
+                            >
+                              <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                                🏷️ Properties del Mensaje CPI
+                                <span className="text-xs text-zinc-500">({Object.keys(detalles.properties).length})</span>
+                              </h4>
+                              <span className="text-zinc-400">
+                                {showPropertiesFor.has(logId) ? '▼' : '▶'}
+                              </span>
+                            </button>
+                            
+                            {showPropertiesFor.has(logId) && (
+                              <div className="mt-3 bg-black/50 rounded p-3 overflow-x-auto">
+                                <pre className="text-xs text-zinc-400">
+                                  {JSON.stringify(detalles.properties, null, 2)}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
                         
-                        {/* Headers */}
+                        {/* BOTÓN: Headers HTTP (colapsable) */}
                         {detalles && detalles.headers && Object.keys(detalles.headers).length > 0 && (
                           <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
-                              📋 Headers HTTP
-                            </h4>
-                            <div className="bg-black/50 rounded p-3 overflow-x-auto">
-                              <pre className="text-xs text-zinc-400">
-                                {JSON.stringify(detalles.headers, null, 2)}
-                              </pre>
-                            </div>
+                            <button
+                              onClick={() => toggleHeaders(logId)}
+                              className="w-full flex items-center justify-between text-left hover:bg-zinc-800 p-2 rounded transition"
+                            >
+                              <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                                � Headers HTTP
+                                <span className="text-xs text-zinc-500">({Object.keys(detalles.headers).length})</span>
+                              </h4>
+                              <span className="text-zinc-400">
+                                {showHeadersFor.has(logId) ? '▼' : '▶'}
+                              </span>
+                            </button>
+                            
+                            {showHeadersFor.has(logId) && (
+                              <div className="mt-3 bg-black/50 rounded p-3 overflow-x-auto">
+                                <pre className="text-xs text-zinc-400">
+                                  {JSON.stringify(detalles.headers, null, 2)}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
 

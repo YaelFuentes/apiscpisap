@@ -254,6 +254,23 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Tabla: ssff_apis (SuccessFactors OData APIs guardadas)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS ssff_apis (
+        id TEXT PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        url TEXT NOT NULL,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        activo BOOLEAN DEFAULT 1,
+        ultima_ejecucion DATETIME,
+        total_ejecuciones INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Índices para mejorar rendimiento
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ejecuciones_integracion ON ejecuciones(integracion_id)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ejecuciones_fecha ON ejecuciones(fecha_inicio)`);
@@ -264,6 +281,7 @@ export async function initializeDatabase() {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_alertas_estado ON alertas(estado)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_apis_sistema ON apis_personalizadas(sistema)`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_apis_endpoint ON apis_personalizadas(endpoint)`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_ssff_apis_nombre ON ssff_apis(nombre)`);
 
     console.log('✅ Base de datos Turso inicializada correctamente');
   } catch (error) {
