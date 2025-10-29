@@ -6,12 +6,16 @@
 
 import { getDatabase } from '@/lib/db-client';
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   let db;
   
   try {
+    // Next.js 15+ requiere await para params
+    const params = await context.params;
+    
     console.log('🔵 ============================================');
     console.log('🔵 API Sistema - Recibiendo petición');
+    console.log('🔵 Params completos:', params);
     console.log('🔵 Sistema (raw):', params.sistema);
     console.log('🔵 Tipo (raw):', params.tipo);
     console.log('🔵 Timestamp:', new Date().toISOString());
@@ -263,8 +267,11 @@ export async function POST(request, { params }) {
 }
 
 // GET - Información sobre esta API
-export async function GET(request, { params }) {
+export async function GET(request, context) {
   try {
+    // Next.js 15+ requiere await para params
+    const params = await context.params;
+    
     // Normalizar parámetros (siempre en minúsculas)
     const sistema = params.sistema?.toLowerCase() || '';
     const tipo = params.tipo?.toLowerCase() || '';
