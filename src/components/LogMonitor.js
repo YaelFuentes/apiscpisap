@@ -178,50 +178,85 @@ export default function LogMonitor() {
 
   // Formatear body (JSON o XML)
   const formatBody = (logId, body) => {
+    if (!body || body.trim() === '') {
+      alert('⚠️ El body está vacío');
+      return;
+    }
+
+    const trimmedBody = body.trim();
+    
+    // Intentar parsear como JSON
     try {
-      // Intentar parsear como JSON
-      const parsed = JSON.parse(body);
+      const parsed = JSON.parse(trimmedBody);
       const formatted = JSON.stringify(parsed, null, 2);
       
       setFormattedBodies(prev => {
         const newMap = new Map(prev);
-        newMap.set(logId, { formatted, type: 'json' });
+        newMap.set(logId, { formatted, type: 'json', original: body });
         return newMap;
       });
-    } catch (e) {
-      // Si no es JSON, intentar formatear como XML
+      
+      console.log('✅ Body formateado como JSON');
+      return;
+    } catch (jsonError) {
+      console.log('⚠️ No es JSON válido:', jsonError.message);
+    }
+    
+    // Intentar formatear como XML
+    if (trimmedBody.startsWith('<') && trimmedBody.includes('>')) {
       try {
-        // Remover espacios en blanco extra
-        let xml = body.trim();
-        
-        // Formatear XML simple
+        let xml = trimmedBody;
         let formatted = '';
         let indent = 0;
         const tab = '  ';
         
-        xml.split(/>\s*</).forEach((node, index, array) => {
-          if (index > 0) node = '<' + node;
-          if (index < array.length - 1) node = node + '>';
-          
-          if (node.match(/^<\/\w/)) indent--; // Closing tag
-          formatted += tab.repeat(indent) + node + '\n';
-          if (node.match(/^<\w[^>]*[^\/]>$/)) indent++; // Opening tag
+        // Dividir por tags
+        const parts = xml.split(/(<[^>]+>)/g).filter(part => part.trim() !== '');
+        
+        parts.forEach(part => {
+          if (part.startsWith('</')) {
+            // Closing tag
+            indent = Math.max(0, indent - 1);
+            formatted += tab.repeat(indent) + part + '\n';
+          } else if (part.startsWith('<')) {
+            // Opening or self-closing tag
+            formatted += tab.repeat(indent) + part + '\n';
+            if (!part.endsWith('/>') && !part.startsWith('<?') && !part.startsWith('<!')) {
+              indent++;
+            }
+          } else {
+            // Text content
+            if (part.trim() !== '') {
+              formatted += tab.repeat(indent) + part.trim() + '\n';
+            }
+          }
         });
         
         setFormattedBodies(prev => {
           const newMap = new Map(prev);
-          newMap.set(logId, { formatted: formatted.trim(), type: 'xml' });
+          newMap.set(logId, { formatted: formatted.trim(), type: 'xml', original: body });
           return newMap;
         });
+        
+        console.log('✅ Body formateado como XML');
+        return;
       } catch (xmlError) {
-        // Si no es ni JSON ni XML, dejar como está
-        setFormattedBodies(prev => {
-          const newMap = new Map(prev);
-          newMap.set(logId, { formatted: body, type: 'text' });
-          return newMap;
-        });
+        console.log('⚠️ Error formateando XML:', xmlError.message);
       }
     }
+    
+    // Si no es ni JSON ni XML
+    setFormattedBodies(prev => {
+      const newMap = new Map(prev);
+      newMap.set(logId, { 
+        formatted: body, 
+        type: 'text',
+        original: body 
+      });
+      return newMap;
+    });
+    
+    alert('⚠️ El contenido no es JSON ni XML. Se muestra como texto plano.');
   };
 
   // Resetear formato del body
@@ -506,6 +541,11 @@ export default function LogMonitor() {
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="text-lg font-bold text-blue-300 flex items-center gap-2">
                               📄 Contenido del Mensaje (Body)
+                              {detalles?.bodySize && (
+                                <span className="text-xs text-blue-400 font-normal">
+                                  ({detalles.bodySize.toLocaleString()} bytes)
+                                </span>
+                              )}
                             </h4>
                             <div className="flex gap-2">
                               {formattedBodies.has(logId) ? (
@@ -517,7 +557,7 @@ export default function LogMonitor() {
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => formatBody(logId, log.mensaje)}
+                                  onClick={() => formatBody(logId, detalles?.fullMessage || log.mensaje)}
                                   className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs font-medium transition"
                                 >
                                   ✨ Formatear
@@ -525,7 +565,10 @@ export default function LogMonitor() {
                               )}
                               <button
                                 onClick={() => {
-                                  navigator.clipboard.writeText(formattedBodies.has(logId) ? formattedBodies.get(logId).formatted : log.mensaje);
+                                  const bodyToCopy = formattedBodies.has(logId) 
+                                    ? formattedBodies.get(logId).formatted 
+                                    : (detalles?.fullMessage || log.mensaje);
+                                  navigator.clipboard.writeText(bodyToCopy);
                                   alert('✅ Body copiado al portapapeles');
                                 }}
                                 className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition"
@@ -541,9 +584,11 @@ export default function LogMonitor() {
                             </div>
                           )}
                           
-                          <div className="bg-black rounded-lg p-4 overflow-x-auto max-h-96">
+                          <div className="bg-black rounded-lg p-4 overflow-x-auto" style={{ maxHeight: '500px' }}>
                             <pre className="text-sm text-green-400 whitespace-pre-wrap break-words">
-                              {formattedBodies.has(logId) ? formattedBodies.get(logId).formatted : log.mensaje}
+                              {formattedBodies.has(logId) 
+                                ? formattedBodies.get(logId).formatted 
+                                : (detalles?.fullMessage || log.mensaje)}
                             </pre>
                           </div>
                         </div>
