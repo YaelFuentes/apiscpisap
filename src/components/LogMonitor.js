@@ -375,6 +375,22 @@ export default function LogMonitor() {
                           <div className="text-white mb-2 break-words">
                             {log.mensaje}
                           </div>
+                          
+                          {/* Info de API personalizada si existe */}
+                          {detalles?.apiInfo && (
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <span className="text-xs text-zinc-500">API:</span>
+                              <span className="px-2 py-0.5 text-xs bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded font-semibold">
+                                🏢 {detalles.apiInfo.sistema}
+                              </span>
+                              <span className="px-2 py-0.5 text-xs bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded font-semibold">
+                                🔧 {detalles.apiInfo.tipoIntegracion}
+                              </span>
+                              <span className="text-xs text-zinc-500 font-mono">
+                                {detalles.apiInfo.nombre}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Icono de expandir/contraer */}
@@ -399,6 +415,38 @@ export default function LogMonitor() {
                     {/* Detalles expandibles */}
                     {isExpanded && (
                       <div className="px-4 pb-4 space-y-3 bg-black/20">
+                        {/* Información de la API (si es una API personalizada) */}
+                        {detalles?.apiInfo && (
+                          <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-purple-300 mb-3 flex items-center gap-2">
+                              🔌 API Personalizada
+                            </h4>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-zinc-500">Sistema:</span>
+                                <span className="text-sm text-purple-400 font-semibold">{detalles.apiInfo.sistema}</span>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-zinc-500">Tipo de Integración:</span>
+                                <span className="text-sm text-blue-400 font-semibold">{detalles.apiInfo.tipoIntegracion}</span>
+                              </div>
+                              <div className="flex flex-col gap-1 col-span-2">
+                                <span className="text-xs text-zinc-500">Nombre:</span>
+                                <span className="text-sm text-white">{detalles.apiInfo.nombre}</span>
+                              </div>
+                              <div className="flex flex-col gap-1 col-span-2">
+                                <span className="text-xs text-zinc-500">Endpoint:</span>
+                                <span className="text-sm text-green-400 font-mono">{detalles.apiInfo.endpoint}</span>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-zinc-500">API ID:</span>
+                                <span className="text-xs text-zinc-400 font-mono">{detalles.apiInfo.id}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
                         {/* Información del Request */}
                         <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
                           <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
@@ -426,6 +474,12 @@ export default function LogMonitor() {
                               <div className="flex gap-2">
                                 <span className="text-xs text-zinc-500 min-w-[120px]">Ejecución ID:</span>
                                 <span className="text-xs text-white font-mono">{log.ejecucion_id}</span>
+                              </div>
+                            )}
+                            {detalles?.requestInfo?.url && (
+                              <div className="flex gap-2">
+                                <span className="text-xs text-zinc-500 min-w-[120px]">URL:</span>
+                                <span className="text-xs text-white font-mono">{detalles.requestInfo.url}</span>
                               </div>
                             )}
                           </div>
@@ -479,8 +533,22 @@ export default function LogMonitor() {
                           </div>
                         )}
 
+                        {/* Properties del Mensaje CPI */}
+                        {detalles && detalles.properties && Object.keys(detalles.properties).length > 0 && (
+                          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
+                              🏷️ Properties del Mensaje CPI
+                            </h4>
+                            <div className="bg-black/50 rounded p-3 overflow-x-auto">
+                              <pre className="text-xs text-zinc-400">
+                                {JSON.stringify(detalles.properties, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+                        
                         {/* Headers */}
-                        {detalles && detalles.headers && (
+                        {detalles && detalles.headers && Object.keys(detalles.headers).length > 0 && (
                           <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
                             <h4 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
                               📋 Headers HTTP
