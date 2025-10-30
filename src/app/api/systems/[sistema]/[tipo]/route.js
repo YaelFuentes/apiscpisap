@@ -46,26 +46,36 @@ export async function POST(request, context) {
     try {
       bodyRaw = await request.text();
       console.log('📦 Body recibido (length):', bodyRaw?.length || 0);
-      console.log('📦 Body preview:', bodyRaw?.substring(0, 200));
       
-      if (contentType.includes('application/json') && bodyRaw) {
-        try {
-          body = JSON.parse(bodyRaw);
-          formato = 'json';
-          console.log('✅ Body parseado como JSON');
-        } catch (e) {
-          console.warn('⚠️ Error parseando JSON, usando como texto:', e.message);
-          body = bodyRaw;
-          formato = 'text';
-        }
+      // Si el body está vacío, puede ser una excepción de CPI
+      if (!bodyRaw || bodyRaw.trim() === '') {
+        console.log('⚠️ Body vacío - Puede ser una excepción de CPI');
+        bodyRaw = '';
+        body = null;
+        formato = 'empty';
       } else {
-        body = bodyRaw;
-        formato = contentType.includes('xml') ? 'xml' : 'text';
+        console.log('📦 Body preview:', bodyRaw?.substring(0, 200));
+        
+        if (contentType.includes('application/json') && bodyRaw) {
+          try {
+            body = JSON.parse(bodyRaw);
+            formato = 'json';
+            console.log('✅ Body parseado como JSON');
+          } catch (e) {
+            console.warn('⚠️ Error parseando JSON, usando como texto:', e.message);
+            body = bodyRaw;
+            formato = 'text';
+          }
+        } else {
+          body = bodyRaw;
+          formato = contentType.includes('xml') ? 'xml' : 'text';
+        }
       }
     } catch (e) {
       console.error('❌ Error leyendo body:', e);
-      body = '';
+      body = null;
       bodyRaw = '';
+      formato = 'empty';
     }
     
     console.log('🔗 Obteniendo conexión a base de datos...');
@@ -105,7 +115,22 @@ export async function POST(request, context) {
     console.log('📊 Integración ID:', api.integracion_id);
     
     // Extraer información del mensaje
-    const mensaje = bodyRaw || 'Sin contenido';
+    // Si hay errorDetails, úsalo como mensaje; si no, usa el body
+    let mensaje = '';
+    if (allProperties.errorDetails) {
+      mensaje = typeof allProperties.errorDetails === 'string' 
+        ? allProperties.errorDetails 
+        : JSON.stringify(allProperties.errorDetails);
+      console.log('📝 Mensaje extraído de errorDetails');
+    } else if (bodyRaw && bodyRaw.trim() !== '') {
+      mensaje = bodyRaw;
+      console.log('📝 Mensaje extraído del body');
+    } else {
+      // Si no hay body ni errorDetails, crear un mensaje descriptivo
+      mensaje = `Excepción en integración ${api.nombre} - Sin payload`;
+      console.log('📝 Mensaje generado por defecto (sin payload)');
+    }
+    
     const timestamp = new Date().toISOString();
     const correlationId = `${api.integracion_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -113,20 +138,30 @@ export async function POST(request, context) {
     
     // Determinar tipo de log
     let tipoLog = 'INFO';
-    const mensajeLower = mensaje.toLowerCase();
     
-    if (typeof body === 'object' && body.nivel) {
-      tipoLog = body.nivel.toUpperCase();
-      console.log('📊 Tipo extraído del body:', tipoLog);
-    } else if (mensajeLower.includes('error') || mensajeLower.includes('fail')) {
+    // 1. Si hay errorDetails en properties, es un ERROR
+    if (hasError) {
       tipoLog = 'ERROR';
-    } else if (mensajeLower.includes('warning') || mensajeLower.includes('warn')) {
-      tipoLog = 'WARNING';
-    } else if (mensajeLower.includes('success') || mensajeLower.includes('ok')) {
-      tipoLog = 'SUCCESS';
+      console.log('🔴 Tipo determinado: ERROR (por errorDetails en properties)');
+    }
+    // 2. Si viene explícitamente en el body
+    else if (typeof body === 'object' && body !== null && body.nivel) {
+      tipoLog = body.nivel.toUpperCase();
+      console.log('📊 Tipo extraído del body.nivel:', tipoLog);
+    }
+    // 3. Detectar por contenido del mensaje
+    else {
+      const mensajeLower = mensaje.toLowerCase();
+      if (mensajeLower.includes('error') || mensajeLower.includes('fail') || mensajeLower.includes('exception')) {
+        tipoLog = 'ERROR';
+      } else if (mensajeLower.includes('warning') || mensajeLower.includes('warn')) {
+        tipoLog = 'WARNING';
+      } else if (mensajeLower.includes('success') || mensajeLower.includes('ok')) {
+        tipoLog = 'SUCCESS';
+      }
     }
     
-    console.log('🏷️ Tipo de log determinado:', tipoLog);
+    console.log('🏷️ Tipo de log final:', tipoLog);
     
     // Capturar todos los headers
     const allHeaders = {};
@@ -135,18 +170,89 @@ export async function POST(request, context) {
     });
     console.log('📋 Headers capturados:', Object.keys(allHeaders).length);
     
-    // Extraer properties si vienen en el body
+    // Extraer properties de múltiples fuentes
     let properties = {};
+    let exchangeProperties = {};
+    
+    // 1. Si vienen en el body como objeto directo
     if (typeof body === 'object' && body !== null) {
       if (body.properties) {
         properties = body.properties;
+        console.log('📊 Properties encontradas en body.properties');
+      }
+      if (body.exchangeProperties) {
+        exchangeProperties = body.exchangeProperties;
+        console.log('📊 Exchange Properties encontradas en body');
       }
       if (body.headers) {
         properties.headersFromBody = body.headers;
       }
+      // Si el body directamente contiene errorDetails
+      if (body.errorDetails) {
+        properties.errorDetails = body.errorDetails;
+        console.log('🔴 errorDetails encontrado en body directamente');
+      }
+    }
+    
+    // 2. Buscar en headers por si CPI envía properties ahí
+    const propertiesHeader = request.headers.get('x-exchange-properties') || 
+                            request.headers.get('exchangeproperties');
+    if (propertiesHeader) {
+      try {
+        const parsedProperties = JSON.parse(propertiesHeader);
+        exchangeProperties = { ...exchangeProperties, ...parsedProperties };
+        console.log('📊 Properties encontradas en headers');
+      } catch (e) {
+        console.warn('⚠️ Error parseando properties del header:', e.message);
+      }
+    }
+    
+    // 3. Combinar properties y exchange properties
+    const allProperties = { ...properties, ...exchangeProperties };
+    console.log('📊 Total properties capturadas:', Object.keys(allProperties).length);
+    
+    // 4. Detectar si hay errorDetails en properties (indica excepción de CPI)
+    const hasError = allProperties.errorDetails || properties.errorDetails;
+    if (hasError) {
+      console.log('🔴 EXCEPCIÓN DETECTADA - errorDetails presente:', 
+        typeof hasError === 'string' ? hasError.substring(0, 100) : 'objeto');
     }
     
     console.log('💾 Guardando log en base de datos...');
+    
+    // Crear objeto de detalles completo
+    const detallesLog = { 
+      formato,
+      contentType,
+      bodySize: bodyRaw?.length || 0,
+      bodyEmpty: !bodyRaw || bodyRaw.trim() === '',
+      fullMessage: mensaje,
+      bodyParsed: typeof body === 'object' ? body : null,
+      bodyRaw: bodyRaw || null,
+      headers: allHeaders,
+      properties: allProperties,
+      hasError: !!hasError,
+      errorDetails: allProperties.errorDetails || null,
+      apiInfo: {
+        id: api.id,
+        sistema: api.sistema,
+        nombre: api.nombre,
+        tipoIntegracion: api.tipo_integracion,
+        endpoint: api.endpoint
+      },
+      requestInfo: {
+        method: 'POST',
+        url: request.url,
+        timestamp: timestamp
+      }
+    };
+    
+    console.log('📦 Detalles a guardar:', {
+      formato,
+      bodyEmpty: detallesLog.bodyEmpty,
+      hasError: detallesLog.hasError,
+      propertiesCount: Object.keys(allProperties).length
+    });
     
     // Registrar el log
     try {
@@ -157,27 +263,7 @@ export async function POST(request, context) {
           api.integracion_id,
           tipoLog,
           mensaje.substring(0, 500),
-          JSON.stringify({ 
-            formato,
-            contentType,
-            bodySize: mensaje.length,
-            fullMessage: mensaje,
-            bodyParsed: typeof body === 'object' ? body : null,
-            headers: allHeaders,
-            properties: properties,
-            apiInfo: {
-              id: api.id,
-              sistema: api.sistema,
-              nombre: api.nombre,
-              tipoIntegracion: api.tipo_integracion,
-              endpoint: api.endpoint
-            },
-            requestInfo: {
-              method: 'POST',
-              url: request.url,
-              timestamp: timestamp
-            }
-          }),
+          JSON.stringify(detallesLog),
           correlationId,
           timestamp
         ]

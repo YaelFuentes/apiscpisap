@@ -2,7 +2,7 @@
 // Componente para monitoreo visual de logs en tiempo real
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export default function LogMonitor() {
   const [logs, setLogs] = useState([]);
@@ -19,12 +19,16 @@ export default function LogMonitor() {
   const [deletingAll, setDeletingAll] = useState(false);
   const [sistemas, setSistemas] = useState([]);
   const [tiposIntegracion, setTiposIntegracion] = useState([]);
+  const loadingRef = useRef(false);
 
   // Función para obtener logs
   const fetchLogs = useCallback(async () => {
-    if (loading) return;
+    // Evitar múltiples llamadas simultáneas
+    if (loadingRef.current) return;
     
+    loadingRef.current = true;
     setLoading(true);
+    
     try {
       const params = new URLSearchParams();
       if (filtroTipo !== 'ALL') params.append('tipo', filtroTipo);
@@ -33,7 +37,21 @@ export default function LogMonitor() {
       params.append('limit', '100');
 
       const response = await fetch(`/api/admin/logs?${params}`);
+      
+      // Verificar si la respuesta es exitosa
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error en la respuesta:', response.status, errorData);
+        throw new Error(errorData.mensaje || `Error HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
+      
+      // Verificar que la respuesta tenga el formato esperado
+      if (!data.success && data.error) {
+        console.error('❌ Error en los datos:', data);
+        throw new Error(data.mensaje || data.error);
+      }
       
       if (data.logs) {
         setLogs(data.logs);
@@ -65,9 +83,10 @@ export default function LogMonitor() {
     } catch (error) {
       console.error('Error fetching logs:', error);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [filtroTipo, filtroSistema, filtroIntegracion, loading]);
+  }, [filtroTipo, filtroSistema, filtroIntegracion]);
 
   // Función para eliminar un log
   const deleteLog = async (logId, e) => {
@@ -77,11 +96,15 @@ export default function LogMonitor() {
     
     setDeleting(logId);
     try {
+      console.log('🗑️ Eliminando log:', logId);
       const response = await fetch(`/api/admin/logs/${logId}`, {
         method: 'DELETE'
       });
 
-      if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      
+      if (response.ok && data.success) {
+        console.log('✅ Log eliminado exitosamente');
         // Remover del estado local
         setLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
         // Remover de expandidos si estaba expandido
@@ -90,12 +113,30 @@ export default function LogMonitor() {
           newSet.delete(logId);
           return newSet;
         });
+        // Remover de otros estados si existen
+        setShowHeadersFor(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(logId);
+          return newSet;
+        });
+        setShowPropertiesFor(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(logId);
+          return newSet;
+        });
+        setFormattedBodies(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(logId);
+          return newMap;
+        });
       } else {
-        alert('Error al eliminar el log');
+        console.error('❌ Error en la respuesta:', response.status, data);
+        const errorMsg = data.mensaje || data.error || 'Error al eliminar el log';
+        alert(`❌ ${errorMsg}`);
       }
     } catch (error) {
-      console.error('Error eliminando log:', error);
-      alert('Error al eliminar el log');
+      console.error('❌ Error crítico eliminando log:', error);
+      alert(`❌ Error de conexión: ${error.message}`);
     } finally {
       setDeleting(null);
     }
@@ -107,35 +148,52 @@ export default function LogMonitor() {
     
     setDeletingAll(true);
     try {
+      console.log('🗑️ Eliminando todos los logs...');
       const response = await fetch('/api/admin/logs', {
         method: 'DELETE'
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      
+      if (response.ok && data.success) {
+        console.log('✅ Todos los logs eliminados:', data.deletedCount);
         setLogs([]);
         setExpandedLogs(new Set());
+        setShowHeadersFor(new Set());
+        setShowPropertiesFor(new Set());
+        setFormattedBodies(new Map());
         alert(`✅ ${data.deletedCount} logs eliminados exitosamente`);
       } else {
-        alert('Error al eliminar los logs');
+        console.error('❌ Error eliminando logs:', response.status, data);
+        const errorMsg = data.mensaje || data.error || 'Error al eliminar los logs';
+        alert(`❌ ${errorMsg}`);
       }
     } catch (error) {
-      console.error('Error eliminando todos los logs:', error);
-      alert('Error al eliminar todos los logs');
+      console.error('❌ Error crítico eliminando todos los logs:', error);
+      alert(`❌ Error de conexión: ${error.message}`);
     } finally {
       setDeletingAll(false);
     }
   };
 
-  // Auto-refresh cada 5 segundos
+  // Auto-refresh cada 1 segundo
   useEffect(() => {
+    // Llamada inicial
     fetchLogs();
     
-    if (autoRefresh) {
-      const interval = setInterval(fetchLogs, 1000); // Actualización cada 1 segundo
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh, fetchLogs]);
+    // Configurar intervalo solo si autoRefresh está activo
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchLogs();
+    }, 2000); // Actualización cada 1 segundo exacto
+    
+    // Limpieza: detener el intervalo cuando el componente se desmonte o cambie autoRefresh
+    return () => {
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh, filtroTipo, filtroSistema, filtroIntegracion]);
 
   // Toggle expandir/contraer log
   const toggleExpanded = (logId) => {
@@ -354,7 +412,7 @@ export default function LogMonitor() {
                 onChange={(e) => setAutoRefresh(e.target.checked)}
                 className="rounded"
               />
-              <span>Auto-refresh (5s)</span>
+              <span>Auto-refresh (1s)</span>
             </label>
             
             <button
@@ -491,9 +549,10 @@ export default function LogMonitor() {
                             )}
                           </div>
 
-                          {/* Mensaje principal */}
-                          <div className="text-white mb-2 break-words">
-                            {log.mensaje}
+                          {/* Mensaje resumido - solo primera línea */}
+                          <div className="text-white text-sm break-words line-clamp-2">
+                            {log.mensaje.split('\n')[0].substring(0, 150)}
+                            {log.mensaje.length > 150 && '...'}
                           </div>
                           
                           {/* Info de API personalizada si existe */}
@@ -509,6 +568,13 @@ export default function LogMonitor() {
                               <span className="text-xs text-zinc-500 font-mono">
                                 {detalles.apiInfo.nombre}
                               </span>
+                            </div>
+                          )}
+                          
+                          {/* Indicador de contenido expandible */}
+                          {!isExpanded && (
+                            <div className="text-xs text-zinc-500 mt-2 italic">
+                              Click para ver detalles completos →
                             </div>
                           )}
                         </div>

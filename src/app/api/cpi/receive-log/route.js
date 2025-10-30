@@ -6,6 +6,7 @@ import { getDatabase } from '@/lib/db-client';
 
 export async function POST(request) {
   let db;
+  const startTime = Date.now();
   
   try {
     console.log('🔵 ============================================');
@@ -16,7 +17,23 @@ export async function POST(request) {
     // Validar variables de entorno
     if (!process.env.database_TURSO_DATABASE_URL || !process.env.database_TURSO_AUTH_TOKEN) {
       console.error('❌ Variables de entorno NO configuradas');
-      throw new Error('Base de datos no configurada correctamente');
+      console.error('❌ DATABASE_URL:', process.env.database_TURSO_DATABASE_URL ? 'presente' : 'ausente');
+      console.error('❌ AUTH_TOKEN:', process.env.database_TURSO_AUTH_TOKEN ? 'presente' : 'ausente');
+      
+      return Response.json({
+        success: false,
+        error: 'DATABASE_NOT_CONFIGURED',
+        mensaje: 'La base de datos no está configurada correctamente',
+        details: 'Faltan variables de entorno requeridas',
+        timestamp: new Date().toISOString()
+      }, { 
+        status: 503,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      });
     }
     console.log('✅ Variables de entorno validadas');
     
@@ -57,9 +74,30 @@ export async function POST(request) {
     try {
       db = getDatabase();
       console.log('✅ Conexión obtenida');
+      
+      // Verificar que la conexión funciona
+      await db.execute({ sql: 'SELECT 1 as test', args: [] });
+      console.log('✅ Conexión verificada y funcional');
     } catch (dbError) {
       console.error('❌ Error fatal obteniendo conexión DB:', dbError);
-      throw new Error(`Error de base de datos: ${dbError.message}`);
+      console.error('❌ Tipo de error:', dbError.name);
+      console.error('❌ Mensaje:', dbError.message);
+      
+      return Response.json({
+        success: false,
+        error: 'DATABASE_CONNECTION_FAILED',
+        mensaje: 'No se pudo conectar a la base de datos',
+        details: dbError.message,
+        errorType: dbError.name,
+        timestamp: new Date().toISOString()
+      }, { 
+        status: 503,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      });
     }
     
     // Extraer información del mensaje
@@ -253,7 +291,9 @@ export async function POST(request) {
       // No lanzar error aquí, el log principal ya se guardó
     }
 
+    const processingTime = Date.now() - startTime;
     console.log('🎉 Proceso completado exitosamente');
+    console.log('⏱️ Tiempo de procesamiento:', processingTime, 'ms');
 
     return Response.json({
       success: true,
@@ -261,21 +301,61 @@ export async function POST(request) {
       correlationId,
       timestamp,
       tipo: tipoLog,
-      integracionId
+      integracionId,
+      processingTime: `${processingTime}ms`,
+      stats: {
+        bodySize: mensaje.length,
+        formato: tipo
+      }
     }, {
       status: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'X-Processing-Time': `${processingTime}ms`,
+        'X-Correlation-Id': correlationId
       }
     });
 
   } catch (error) {
-    console.error('❌ ERROR CRÍTICO en /api/cpi/receive-log:', error);
+    const processingTime = Date.now() - startTime;
+    
+    console.error('❌ ============================================');
+    console.error('❌ ERROR CRÍTICO en /api/cpi/receive-log');
+    console.error('❌ ============================================');
+    console.error('❌ Tipo de error:', error.name);
     console.error('❌ Mensaje:', error.message);
     console.error('❌ Stack:', error.stack);
-    console.error('❌ Nombre:', error.name);
+    console.error('❌ Tiempo hasta el error:', processingTime, 'ms');
+    console.error('❌ ============================================');
+    
+    // Determinar el tipo de error y código HTTP apropiado
+    let errorCode = 'INTERNAL_SERVER_ERROR';
+    let statusCode = 500;
+    let errorMessage = 'Error interno del servidor';
+    
+    if (error.message.includes('Base de datos no configurada')) {
+      errorCode = 'DATABASE_NOT_CONFIGURED';
+      statusCode = 503;
+      errorMessage = 'Base de datos no configurada';
+    } else if (error.message.includes('Error de base de datos')) {
+      errorCode = 'DATABASE_ERROR';
+      statusCode = 503;
+      errorMessage = 'Error de base de datos';
+    } else if (error.message.includes('guardando log')) {
+      errorCode = 'LOG_INSERT_FAILED';
+      statusCode = 500;
+      errorMessage = 'Error al guardar el log';
+    } else if (error.message.includes('proyecto')) {
+      errorCode = 'PROJECT_ERROR';
+      statusCode = 500;
+      errorMessage = 'Error gestionando el proyecto';
+    } else if (error.message.includes('integración')) {
+      errorCode = 'INTEGRATION_ERROR';
+      statusCode = 500;
+      errorMessage = 'Error gestionando la integración';
+    }
     
     // Intentar cerrar la conexión de DB si está abierta
     if (db) {
@@ -286,21 +366,33 @@ export async function POST(request) {
       }
     }
     
+    // Respuesta de error estructurada
     return Response.json(
       { 
         success: false,
-        error: 'Error procesando log', 
+        error: errorCode,
+        mensaje: errorMessage,
         details: error.message,
-        errorName: error.name,
+        errorType: error.name,
         timestamp: new Date().toISOString(),
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        processingTime: `${processingTime}ms`,
+        // Solo incluir stack trace en desarrollo
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+        // Información adicional para debugging
+        debug: {
+          endpoint: '/api/cpi/receive-log',
+          method: 'POST',
+          hadDbConnection: !!db
+        }
       },
       { 
-        status: 500,
+        status: statusCode,
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type'
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'X-Error-Code': errorCode,
+          'X-Processing-Time': `${processingTime}ms`
         }
       }
     );
