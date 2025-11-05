@@ -7,10 +7,20 @@
 import { getDatabase } from '@/lib/db-client';
 
 export async function POST(request, context) {
+  // Declarar TODAS las variables al inicio para evitar ReferenceError
   let db;
   let params;
   let sistema = '';
   let tipo = '';
+  let body;
+  let bodyRaw;
+  let formato = 'json';
+  let properties = {};
+  let exchangeProperties = {};
+  let allProperties = {};
+  let hasError = false;
+  let mensaje = '';
+  let tipoLog = 'INFO';
   
   try {
     // Next.js 15+ requiere await para params
@@ -40,10 +50,6 @@ export async function POST(request, context) {
     
     const contentType = request.headers.get('content-type') || '';
     console.log('📥 Content-Type:', contentType);
-    
-    let body;
-    let bodyRaw;
-    let formato = 'json';
     
     // Leer y parsear body
     try {
@@ -119,7 +125,7 @@ export async function POST(request, context) {
     
     // Extraer información del mensaje
     // Si hay errorDetails, úsalo como mensaje; si no, usa el body
-    let mensaje = '';
+    mensaje = '';
     if (allProperties.errorDetails) {
       mensaje = typeof allProperties.errorDetails === 'string' 
         ? allProperties.errorDetails 
@@ -140,7 +146,7 @@ export async function POST(request, context) {
     console.log('🆔 Correlation ID:', correlationId);
     
     // Determinar tipo de log
-    let tipoLog = 'INFO';
+    tipoLog = 'INFO';
     
     // 1. Si hay errorDetails en properties, es un ERROR
     if (hasError) {
@@ -174,8 +180,9 @@ export async function POST(request, context) {
     console.log('📋 Headers capturados:', Object.keys(allHeaders).length);
     
     // Extraer properties de múltiples fuentes
-    let properties = {};
-    let exchangeProperties = {};
+    // (variables ya declaradas al inicio)
+    properties = {};
+    exchangeProperties = {};
     
     // 1. Si vienen en el body como objeto directo
     if (typeof body === 'object' && body !== null) {
@@ -211,11 +218,11 @@ export async function POST(request, context) {
     }
     
     // 3. Combinar properties y exchange properties
-    const allProperties = { ...properties, ...exchangeProperties };
+    allProperties = { ...properties, ...exchangeProperties };
     console.log('📊 Total properties capturadas:', Object.keys(allProperties).length);
     
     // 4. Detectar si hay errorDetails en properties (indica excepción de CPI)
-    const hasError = allProperties.errorDetails || properties.errorDetails;
+    hasError = allProperties.errorDetails || properties.errorDetails;
     if (hasError) {
       console.log('🔴 EXCEPCIÓN DETECTADA - errorDetails presente:', 
         typeof hasError === 'string' ? hasError.substring(0, 100) : 'objeto');
