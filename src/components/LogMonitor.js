@@ -3,6 +3,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiGet, apiDelete } from '@/lib/api-utils';
+import { useNotifications } from './NotificationSystem';
 
 export default function LogMonitor() {
   const [logs, setLogs] = useState([]);
@@ -20,6 +22,7 @@ export default function LogMonitor() {
   const [sistemas, setSistemas] = useState([]);
   const [tiposIntegracion, setTiposIntegracion] = useState([]);
   const loadingRef = useRef(false);
+  const notify = useNotifications();
 
   // Función para obtener logs
   const fetchLogs = useCallback(async () => {
@@ -36,22 +39,8 @@ export default function LogMonitor() {
       if (filtroIntegracion !== 'ALL') params.append('tipoIntegracion', filtroIntegracion);
       params.append('limit', '100');
 
-      const response = await fetch(`/api/admin/logs?${params}`);
-      
-      // Verificar si la respuesta es exitosa
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Error en la respuesta:', response.status, errorData);
-        throw new Error(errorData.mensaje || `Error HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Verificar que la respuesta tenga el formato esperado
-      if (!data.success && data.error) {
-        console.error('❌ Error en los datos:', data);
-        throw new Error(data.mensaje || data.error);
-      }
+      // Usar apiGet con notificaciones automáticas solo para errores críticos
+      const data = await apiGet(`/api/admin/logs?${params}`, false);
       
       if (data.logs) {
         setLogs(data.logs);
@@ -82,11 +71,12 @@ export default function LogMonitor() {
       }
     } catch (error) {
       console.error('Error fetching logs:', error);
+      notify.error('Error cargando logs', error.message);
     } finally {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [filtroTipo, filtroSistema, filtroIntegracion]);
+  }, [filtroTipo, filtroSistema, filtroIntegracion, notify]);
 
   // Función para eliminar un log
   const deleteLog = async (logId, e) => {
@@ -97,14 +87,12 @@ export default function LogMonitor() {
     setDeleting(logId);
     try {
       console.log('🗑️ Eliminando log:', logId);
-      const response = await fetch(`/api/admin/logs/${logId}`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json().catch(() => ({}));
+      const data = await apiDelete(`/api/admin/logs/${logId}`, false);
       
-      if (response.ok && data.success) {
+      if (data.success) {
         console.log('✅ Log eliminado exitosamente');
+        notify.success('Log eliminado', `Log #${logId} eliminado correctamente`);
+        
         // Remover del estado local
         setLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
         // Remover de expandidos si estaba expandido
@@ -129,14 +117,10 @@ export default function LogMonitor() {
           newMap.delete(logId);
           return newMap;
         });
-      } else {
-        console.error('❌ Error en la respuesta:', response.status, data);
-        const errorMsg = data.mensaje || data.error || 'Error al eliminar el log';
-        alert(`❌ ${errorMsg}`);
       }
     } catch (error) {
       console.error('❌ Error crítico eliminando log:', error);
-      alert(`❌ Error de conexión: ${error.message}`);
+      notify.error('Error eliminando log', error.message);
     } finally {
       setDeleting(null);
     }

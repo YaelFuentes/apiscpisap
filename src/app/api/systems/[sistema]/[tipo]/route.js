@@ -123,21 +123,82 @@ export async function POST(request, context) {
     console.log('✅ API encontrada:', api.nombre);
     console.log('📊 Integración ID:', api.integracion_id);
     
+    // ========================================
+    // PROXY AUTOMÁTICO A SAP CPI
+    // ========================================
+    // Si es certwebhooks de teachlr, reenviar automáticamente a SAP CPI
+    if (sistema === 'teachlr' && tipo === 'certwebhooks') {
+      console.log('🔄 Iniciando proxy a SAP CPI...');
+      
+      try {
+        const cpiUrl = 'https://e0980-iflmap.hcisbt.us2.hana.ondemand.com/http/Certificate/user';
+        const username = 'SFAPIUser@gerdaumetaT1';
+        const password = 'Agp.2025';
+        
+        // Crear credenciales Basic Auth
+        const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+        
+        console.log('📤 Enviando a CPI:', cpiUrl);
+        console.log('📦 Body a enviar:', bodyRaw?.substring(0, 200));
+        
+        // Reenviar el body tal cual como llegó
+        const cpiResponse = await fetch(cpiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${credentials}`
+          },
+          body: bodyRaw || '{}',
+          // Timeout de 30 segundos
+          signal: AbortSignal.timeout(30000)
+        });
+        
+        const cpiResponseText = await cpiResponse.text();
+        console.log('📥 Respuesta CPI Status:', cpiResponse.status);
+        console.log('📥 Respuesta CPI Body:', cpiResponseText?.substring(0, 200));
+        
+        if (cpiResponse.ok) {
+          console.log('✅ Proxy a CPI exitoso');
+          tipoLog = 'SUCCESS';
+          mensaje = `Webhook reenviado exitosamente a SAP CPI - Status: ${cpiResponse.status}`;
+        } else {
+          console.error('❌ Error en respuesta de CPI:', cpiResponse.status);
+          tipoLog = 'ERROR';
+          mensaje = `Error en CPI - Status: ${cpiResponse.status} - ${cpiResponseText}`;
+        }
+        
+      } catch (cpiError) {
+        console.error('❌ Error crítico en proxy a CPI:', cpiError);
+        tipoLog = 'ERROR';
+        
+        if (cpiError.name === 'AbortError' || cpiError.name === 'TimeoutError') {
+          mensaje = `Timeout enviando webhook a SAP CPI (30s)`;
+        } else {
+          mensaje = `Error enviando webhook a SAP CPI: ${cpiError.message}`;
+        }
+      }
+    }
+    // ========================================
+    // FIN PROXY AUTOMÁTICO
+    // ========================================
+    
     // Extraer información del mensaje
     // Si hay errorDetails, úsalo como mensaje; si no, usa el body
-    mensaje = '';
-    if (allProperties.errorDetails) {
-      mensaje = typeof allProperties.errorDetails === 'string' 
-        ? allProperties.errorDetails 
-        : JSON.stringify(allProperties.errorDetails);
-      console.log('📝 Mensaje extraído de errorDetails');
-    } else if (bodyRaw && bodyRaw.trim() !== '') {
-      mensaje = bodyRaw;
-      console.log('📝 Mensaje extraído del body');
-    } else {
-      // Si no hay body ni errorDetails, crear un mensaje descriptivo
-      mensaje = `Excepción en integración ${api.nombre} - Sin payload`;
-      console.log('📝 Mensaje generado por defecto (sin payload)');
+    if (tipoLog !== 'SUCCESS' && tipoLog !== 'ERROR') {
+      mensaje = '';
+      if (allProperties.errorDetails) {
+        mensaje = typeof allProperties.errorDetails === 'string' 
+          ? allProperties.errorDetails 
+          : JSON.stringify(allProperties.errorDetails);
+        console.log('📝 Mensaje extraído de errorDetails');
+      } else if (bodyRaw && bodyRaw.trim() !== '') {
+        mensaje = bodyRaw;
+        console.log('📝 Mensaje extraído del body');
+      } else {
+        // Si no hay body ni errorDetails, crear un mensaje descriptivo
+        mensaje = `Excepción en integración ${api.nombre} - Sin payload`;
+        console.log('📝 Mensaje generado por defecto (sin payload)');
+      }
     }
     
     const timestamp = new Date().toISOString();
@@ -145,28 +206,28 @@ export async function POST(request, context) {
     
     console.log('🆔 Correlation ID:', correlationId);
     
-    // Determinar tipo de log
-    tipoLog = 'INFO';
-    
-    // 1. Si hay errorDetails en properties, es un ERROR
-    if (hasError) {
-      tipoLog = 'ERROR';
-      console.log('🔴 Tipo determinado: ERROR (por errorDetails en properties)');
-    }
-    // 2. Si viene explícitamente en el body
-    else if (typeof body === 'object' && body !== null && body.nivel) {
-      tipoLog = body.nivel.toUpperCase();
-      console.log('📊 Tipo extraído del body.nivel:', tipoLog);
-    }
-    // 3. Detectar por contenido del mensaje
-    else {
-      const mensajeLower = mensaje.toLowerCase();
-      if (mensajeLower.includes('error') || mensajeLower.includes('fail') || mensajeLower.includes('exception')) {
+    // Determinar tipo de log (si no fue definido por el proxy)
+    if (tipoLog === 'INFO') {
+      // 1. Si hay errorDetails en properties, es un ERROR
+      if (hasError) {
         tipoLog = 'ERROR';
-      } else if (mensajeLower.includes('warning') || mensajeLower.includes('warn')) {
-        tipoLog = 'WARNING';
-      } else if (mensajeLower.includes('success') || mensajeLower.includes('ok')) {
-        tipoLog = 'SUCCESS';
+        console.log('🔴 Tipo determinado: ERROR (por errorDetails en properties)');
+      }
+      // 2. Si viene explícitamente en el body
+      else if (typeof body === 'object' && body !== null && body.nivel) {
+        tipoLog = body.nivel.toUpperCase();
+        console.log('📊 Tipo extraído del body.nivel:', tipoLog);
+      }
+      // 3. Detectar por contenido del mensaje
+      else {
+        const mensajeLower = mensaje.toLowerCase();
+        if (mensajeLower.includes('error') || mensajeLower.includes('fail') || mensajeLower.includes('exception')) {
+          tipoLog = 'ERROR';
+        } else if (mensajeLower.includes('warning') || mensajeLower.includes('warn')) {
+          tipoLog = 'WARNING';
+        } else if (mensajeLower.includes('success') || mensajeLower.includes('ok')) {
+          tipoLog = 'SUCCESS';
+        }
       }
     }
     
