@@ -8,10 +8,13 @@ import { getDatabase } from '@/lib/db-client';
 
 export async function POST(request, context) {
   let db;
+  let params;
+  let sistema = '';
+  let tipo = '';
   
   try {
     // Next.js 15+ requiere await para params
-    const params = await context.params;
+    params = await context.params;
     
     console.log('🔵 ============================================');
     console.log('🔵 API Sistema - Recibiendo petición');
@@ -22,8 +25,8 @@ export async function POST(request, context) {
     console.log('🔵 ============================================');
     
     // Normalizar parámetros (siempre en minúsculas para coincidir con el endpoint guardado)
-    const sistema = params.sistema?.toLowerCase() || '';
-    const tipo = params.tipo?.toLowerCase() || '';
+    sistema = params.sistema?.toLowerCase() || '';
+    tipo = params.tipo?.toLowerCase() || '';
     
     console.log('🔵 Sistema (normalizado):', sistema);
     console.log('🔵 Tipo (normalizado):', tipo);
@@ -330,14 +333,15 @@ export async function POST(request, context) {
     console.error('❌ Stack:', error.stack);
     console.error('❌ Nombre:', error.name);
     
+    // Usar las variables que ya declaramos fuera del try
     return Response.json(
       { 
         success: false,
         error: 'Error procesando log', 
         details: error.message,
         errorName: error.name,
-        sistema: params.sistema,
-        tipo: params.tipo,
+        sistema: sistema || params?.sistema || 'unknown',
+        tipo: tipo || params?.tipo || 'unknown',
         timestamp: new Date().toISOString()
       },
       { 
