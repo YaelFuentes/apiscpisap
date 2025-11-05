@@ -135,10 +135,12 @@ export async function POST(request, context) {
         const username = 'SFAPIUser@gerdaumetaT1';
         const password = 'Agp.2025';
         
-        // Crear credenciales Basic Auth
-        const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+        // Crear credenciales Basic Auth (compatible con Edge Runtime de Vercel)
+        const credentials = btoa(`${username}:${password}`);
         
         console.log('📤 Enviando a CPI:', cpiUrl);
+        console.log('🔐 Usuario:', username);
+        console.log('🔑 Auth Header:', `Basic ${credentials.substring(0, 20)}...`);
         console.log('📦 Body a enviar:', bodyRaw?.substring(0, 200));
         
         // Reenviar el body tal cual como llegó
