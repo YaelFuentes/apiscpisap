@@ -131,16 +131,24 @@ export async function POST(request, context) {
       console.log('🔄 Iniciando proxy a SAP CPI...');
       
       try {
-        const cpiUrl = 'https://e0980-iflmap.hcisbt.us2.hana.ondemand.com/http/Certificate/user';
-        const username = 'SFAPIUser@gerdaumetaT1';
-        const password = 'Agp.2025';
+        // Obtener credenciales desde variables de entorno
+        const cpiUrl = process.env.CPI_CERTIFICATE_URL || 'https://e0980-iflmap.hcisbt.us2.hana.ondemand.com/http/Certificate/user';
+        const username = process.env.CPI_USERNAME || 'SFAPIUser@gerdaumetaT1';
+        const password = process.env.CPI_PASSWORD || 'Agp.2025';
         
-        // Crear credenciales Basic Auth (compatible con Edge Runtime de Vercel)
-        const credentials = btoa(`${username}:${password}`);
+        // Validar que las credenciales existan
+        if (!username || !password) {
+          throw new Error('Credenciales de CPI no configuradas');
+        }
+        
+        // Crear credenciales Basic Auth (formato correcto)
+        const authString = `${username}:${password}`;
+        const base64Credentials = btoa(authString);
         
         console.log('📤 Enviando a CPI:', cpiUrl);
         console.log('🔐 Usuario:', username);
-        console.log('🔑 Auth Header:', `Basic ${credentials.substring(0, 20)}...`);
+        console.log('🔑 Auth String length:', authString.length);
+        console.log('🔑 Base64 length:', base64Credentials.length);
         console.log('📦 Body a enviar:', bodyRaw?.substring(0, 200));
         
         // Reenviar el body tal cual como llegó
@@ -148,7 +156,7 @@ export async function POST(request, context) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Basic ${credentials}`
+            'Authorization': `Basic ${base64Credentials}`
           },
           body: bodyRaw || '{}',
           // Timeout de 30 segundos
